@@ -1,0 +1,252 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# ========================
+# FRONTEND (Next.js/React)
+# ========================
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# ========================
+# BACKEND (Python/FastAPI)
+# ========================
+
+# Python virtual environments (all common names)
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+backend/venv/
+backend/.venv/
+backend/env/
+backend/.env/
+backend/ENV/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Alembic (database migrations)
+alembic/versions/*.py
+!alembic/versions/
+
+# ========================
+# ENVIRONMENT & CONFIG
+# ========================
+
+# Environment variables
+.env*
+!.env.example
+.envrc
+
+# Configuration files with secrets
+config.ini
+config.cfg
+settings.ini
+secrets.json
+
+# ========================
+# DATABASES & VECTORSTORE
+# ========================
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# ChromaDB
+vectorstore/
+chroma/
+*.chroma
+
+# ========================
+# LOGS & TEMPORARY FILES
+# ========================
+
+# Log files
+*.log
+logs/
+log/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# ========================
+# SYSTEM & MISC
+# ========================
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor backup files
+*~
+*.swp
+*.swo
+*#
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Debug files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ========================
+# DEPLOYMENT & SERVICES
+# ========================
+
+# Vercel
+.vercel
+
+# Clerk configuration (can include secrets)
+/.clerk/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Kubernetes
+*.kubeconfig
