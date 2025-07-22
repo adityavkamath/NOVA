@@ -31,9 +31,14 @@ async def create_chat_session(
     try:
         # Validate that the source (PDF / CSV etc) belongs to the current user if source_id is provided
         if request.source_id:
-            pdf_response = supabase.table("pdf_files").select("id").eq("id", request.source_id).eq("user_id", current_user["id"]).execute()
-            if not pdf_response.data:
-                raise HTTPException(status_code=404, detail="PDF not found or you don't have permission to access it")
+            if request.feature_type == "pdf":
+                pdf_response = supabase.table("pdf_files").select("id").eq("id", request.source_id).eq("user_id", current_user["id"]).execute()
+                if not pdf_response.data:
+                    raise HTTPException(status_code=404, detail="PDF not found or you don't have permission to access it")
+            elif request.feature_type == "csv":
+                csv_response = supabase.table("csv_datasets").select("id").eq("id", request.source_id).eq("user_id", current_user["id"]).execute()
+                if not csv_response.data:
+                    raise HTTPException(status_code=404, detail="CSV not found or you don't have permission to access it")
 
         # Create new chat session
         session_id = str(uuid.uuid4())
@@ -100,6 +105,7 @@ async def get_chat_session(
 async def get_user_chat_sessions(
     current_user: dict = Depends(get_current_user),
     feature_type: Optional[str] = None,
+    source_id: Optional[str] = None,
     limit: Optional[int] = 50
 ):
     """Get all chat sessions for the current user"""
@@ -109,6 +115,10 @@ async def get_user_chat_sessions(
         # Filter by feature type if provided
         if feature_type:
             query = query.eq("feature_type", feature_type)
+        
+        # Filter by source_id if provided
+        if source_id:
+            query = query.eq("source_id", source_id)
         
         # Apply limit
         query = query.limit(limit).order("created_at", desc=True)
@@ -195,7 +205,9 @@ async def get_chat_messages(
 class SendMessageRequest(BaseModel):
     session_id: str
     message: str
-    pdf_id: str
+    pdf_id: Optional[str] = None
+    csv_id: Optional[str] = None
+    web_id: Optional[str] = None
 
 @router.post("/send-message")
 async def send_message(
@@ -203,6 +215,8 @@ async def send_message(
     current_user: dict = Depends(get_current_user)
 ):
     try:
+        print(f"DEBUG: send_message received - session_id: {request.session_id}, pdf_id: {request.pdf_id}, csv_id: {request.csv_id}, web_id: {request.web_id}")
+        
         # Verify session belongs to user
         session_response = supabase.table("chat_sessions").select("id").eq("id", request.session_id).eq("user_id", current_user["id"]).execute()
         
@@ -230,7 +244,9 @@ async def send_message(
                 request.message, 
                 request.session_id, 
                 request.pdf_id, 
-                current_user
+                current_user,
+                csv_id=request.csv_id,
+                web_id=request.web_id
             ):
                 # Extract content from chunk
                 if chunk.startswith("data: ") and not chunk.endswith("[DONE]\n\n"):

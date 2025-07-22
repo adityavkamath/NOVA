@@ -1,0 +1,245 @@
+"use client";
+
+import type React from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { GripVertical } from "lucide-react";
+import CsvViewer from "@/components/CSVviewer";
+import ChatSection from "@/components/ChatSection";
+import { useParams, useSearchParams } from "next/navigation";
+import axios from "axios";
+import { toast } from "sonner";
+import { useUser } from "@clerk/nextjs";
+
+interface Message {
+  id: string;
+  type: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  isLoading?: boolean;
+}
+
+interface CsvChatPageProps {
+  className?: string;
+}
+
+export default function CsvChatPage({ className = "" }: CsvChatPageProps) {
+  const [leftWidth, setLeftWidth] = useState(40);
+  const [isResizing, setIsResizing] = useState(false);
+  const [csvUrl, setCsvUrl] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const { user, isLoaded } = useUser();
+
+  const fetchCsvDetails = async () => {
+    try {
+      const userId = user?.id;
+
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/api/csv/${id}`,
+        {
+          headers: {
+            "user-id": userId,
+          },
+        }
+      );
+      const { public_url, filename } = response.data;
+
+      setFileName(filename);
+      setCsvUrl(public_url);
+      
+      // Get session ID from URL params first
+      const urlSessionId = searchParams.get('sessionId');
+      console.log("DEBUG: CSV Chat Page - id:", id, "urlSessionId:", urlSessionId, "searchParams:", Object.fromEntries(searchParams));
+      
+      if (urlSessionId && urlSessionId !== "undefined") {
+        setSessionId(urlSessionId);
+        console.log("DEBUG: CSV Chat Page - sessionId set from URL:", urlSessionId);
+      } else {
+        console.log("DEBUG: CSV Chat Page - No valid sessionId in URL, checking for existing session or creating new one");
+        // Check if there's an existing session for this CSV
+        await findOrCreateSession(filename);
+      }
+
+      toast.success("CSV details loaded successfully!");
+    } catch (error) {
+      console.error("Error fetching CSV details:", error);
+      toast.error("Failed to load CSV details. Please try again.");
+    }
+  };
+
+  const findOrCreateSession = async (csvFileName: string) => {
+    if (!user?.id || !id) {
+      console.log("DEBUG: Cannot find/create session - missing data:", { userId: user?.id, csvId: id });
+      return;
+    }
+
+    try {
+      // First, try to find an existing session for this CSV
+      console.log("DEBUG: Looking for existing session for CSV:", id);
+      const existingSessionResponse = await axios.get(
+        `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/api/chat/sessions`,
+        {
+          headers: {
+            "user-id": user.id,
+          },
+          params: {
+            feature_type: "csv",
+            source_id: id
+          }
+        }
+      );
+
+      if (existingSessionResponse.data.success && existingSessionResponse.data.data.length > 0) {
+        // Use the most recent existing session
+        const mostRecentSession = existingSessionResponse.data.data[0];
+        setSessionId(mostRecentSession.id);
+        console.log("DEBUG: Found existing session:", mostRecentSession.id);
+        return;
+      }
+    } catch (error) {
+      console.log("DEBUG: No existing session found or error fetching sessions:", error);
+    }
+
+    // If no existing session, create a new one
+    await createChatSession(csvFileName);
+  };
+
+  const createChatSession = async (csvFileName: string) => {
+    if (!user?.id || !id) {
+      console.log("DEBUG: Cannot create session - missing data:", { userId: user?.id, csvId: id });
+      return;
+    }
+
+    setIsCreatingSession(true);
+    try {
+      console.log("DEBUG: Creating new chat session for CSV:", id);
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/api/chat/create-session`,
+        {
+          user_id: user.id,
+          feature_type: "csv",
+          source_id: id,
+          title: `CSV Chat - ${csvFileName}`,
+        },
+        {
+          headers: {
+            "user-id": user.id,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        const newSessionId = response.data.data.session_id;
+        setSessionId(newSessionId);
+        console.log("DEBUG: CSV Chat Page - Created new session:", newSessionId);
+        toast.success("Chat session created!");
+      }
+    } catch (error: any) {
+      console.error("Session creation error:", error);
+      toast.error("Failed to create chat session");
+    } finally {
+      setIsCreatingSession(false);
+    }
+  };
+
+  useEffect(() => {
+    console.log("DEBUG: CSV Chat Page useEffect - isLoaded:", isLoaded, "user?.id:", user?.id, "id:", id, "searchParams:", Object.fromEntries(searchParams));
+    if (isLoaded && user?.id && id) {
+      fetchCsvDetails();
+    }
+  }, [isLoaded, user?.id, id, searchParams]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing || !containerRef.current) return;
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newLeftWidth =
+        ((e.clientX - containerRect.left) / containerRect.width) * 100;
+
+      const constrainedWidth = Math.min(Math.max(newLeftWidth, 30), 70);
+      setLeftWidth(constrainedWidth);
+    },
+    [isResizing]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, handleMouseMove, handleMouseUp]);
+
+  return (
+    <div
+      className={`h-screen w-full bg-black text-white flex overflow-hidden ${className}`}
+    >
+      <div ref={containerRef} className="flex w-full h-full">
+        {csvUrl && fileName ? (
+          <div style={{ width: `${leftWidth}%` }} className="h-full">
+            <CsvViewer csvUrl={csvUrl} fileName={fileName} />
+          </div>
+        ) : (
+          <div style={{ width: `${leftWidth}%` }} className="flex items-center justify-center h-full">
+            <p className="text-gray-500">CSV not yet loaded...</p>
+          </div>
+        )}
+
+        {/* Resizer */}
+        <div
+          className={`w-1 bg-black hover:bg-green-500 cursor-col-resize transition-colors duration-200 relative flex items-center justify-center ${
+            isResizing ? "bg-gradient-to-b from-green-600 to-emerald-600" : ""
+          }`}
+          onMouseDown={handleMouseDown}
+        >
+          <div className="absolute inset-y-0 -inset-x-1 flex items-center justify-center">
+            <GripVertical className="h-4 w-4 text-gray-400" />
+          </div>
+        </div>
+
+        {/* Chat Section */}
+        <div style={{ width: `${100 - leftWidth}%` }} className="h-full">
+          {sessionId && sessionId !== "undefined" && csvUrl && fileName ? (
+            <ChatSection 
+              fileName={fileName} 
+              sessionId={sessionId}
+              csvId={id}
+            />
+          ) : (
+            <div className="h-full bg-black flex items-center justify-center">
+              <div className="text-gray-400">
+                {isCreatingSession ? "Creating chat session..." : 
+                 !sessionId || sessionId === "undefined" ? "No valid chat session found..." : 
+                 "Loading chat..."}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

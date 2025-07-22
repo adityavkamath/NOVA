@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import pdf_routes, chat_routes, multi_chat_routes
+from routes import pdf_routes, chat_routes, multi_chat_routes, csv_routes, web_routes
 
 from auth.clerk_auth import get_current_user
 
@@ -24,6 +24,8 @@ app.add_middleware(
 )
 
 app.include_router(pdf_routes.router, prefix="/api/pdf", tags=["PDF Upload"])
+app.include_router(csv_routes.router, prefix="/api/csv", tags=["CSV Upload"])
+app.include_router(web_routes.router, prefix="/api/web", tags=["Web Scraping"])
 app.include_router(chat_routes.router, prefix="/api/chat", tags=["Chat Sessions"])
 app.include_router(multi_chat_routes.router, prefix="/api/multi", tags=["Multi Chat"])
 

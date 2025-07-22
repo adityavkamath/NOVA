@@ -363,7 +363,9 @@ interface Message {
 interface ChatSectionProps {
   fileName: string;
   sessionId: string;
-  pdfId: string;
+  pdfId?: string;
+  csvId?: string;
+  webId?: string;
   className?: string;
 }
 
@@ -463,6 +465,8 @@ export default function ChatSection({
   fileName,
   sessionId,
   pdfId,
+  csvId,
+  webId,
   className = "",
 }: ChatSectionProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -476,6 +480,11 @@ export default function ChatSection({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const { user, isSignedIn } = useUser();
+
+  // Only log when there are issues
+  if (!sessionId || sessionId === "undefined") {
+    console.log("DEBUG: ChatSection - Invalid sessionId:", sessionId, "csvId:", csvId, "pdfId:", pdfId);
+  }
 
   // Enhanced auto-scroll function
   const scrollToBottom = (smooth: boolean = true): void => {
@@ -501,7 +510,10 @@ export default function ChatSection({
 
   useEffect(() => {
     const loadMessages = async (): Promise<void> => {
-      if (!sessionId || !user?.id) return;
+      if (!sessionId || sessionId === "undefined" || !user?.id) {
+        console.log("DEBUG: ChatSection - Invalid sessionId or user, skipping message load:", { sessionId, userId: user?.id });
+        return;
+      }
 
       try {
         const response = await fetch(
@@ -548,7 +560,14 @@ export default function ChatSection({
   }, [sessionId, user?.id, fileName]);
 
   const handleSendMessage = async (): Promise<void> => {
-    if (!inputMessage.trim() || !sessionId || !user?.id) return;
+    if (!inputMessage.trim() || !sessionId || sessionId === "undefined" || !user?.id) {
+      console.log("DEBUG: ChatSection - Cannot send message:", { 
+        hasMessage: !!inputMessage.trim(), 
+        sessionId, 
+        userId: user?.id 
+      });
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -588,7 +607,9 @@ export default function ChatSection({
           body: JSON.stringify({
             session_id: sessionId,
             message: currentMessage,
-            pdf_id: pdfId,
+            pdf_id: pdfId && pdfId !== "undefined" ? pdfId : undefined,
+            csv_id: csvId && csvId !== "undefined" ? csvId : undefined,
+            web_id: webId && webId !== "undefined" ? webId : undefined,
           }),
         }
       );
@@ -875,7 +896,7 @@ export default function ChatSection({
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask a question about the PDF..."
+              placeholder={csvId ? "Ask a question about the CSV data..." : "Ask a question about the PDF..."}
               className="bg-gray-200/10 border-gray-600/30 px-4 py-3 text-white placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl min-h-[48px] resize-none backdrop-blur-sm"
               disabled={isTyping}
             />

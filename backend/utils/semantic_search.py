@@ -51,6 +51,47 @@ for key, collection_name in collection_names.items():
         # Don't add to collections if it failed to load
         collections[key] = None
 
+# Semantic search function for document embeddings stored in Supabase
+async def semantic_search(query: str, user_id: str, feature_type: str, source_id: str, top_k: int = 5):
+    """
+    Perform semantic search on embeddings stored in Supabase
+    """
+    try:
+        print(f"DEBUG: semantic_search called with - user_id: {user_id}, feature_type: {feature_type}, source_id: {source_id}")
+        
+        from supabase_client import supabase
+        from langchain_openai import OpenAIEmbeddings
+        
+        # Create embedding for the query
+        embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
+        query_embedding = embeddings_model.embed_query(query)
+        
+        # Search for similar embeddings in Supabase using cosine similarity
+        # Note: This uses Supabase's vector similarity search
+        response = supabase.rpc(
+            'match_documents',
+            {
+                'query_embedding': query_embedding,
+                'match_user_id': user_id,
+                'match_feature_type': feature_type,
+                'match_source_id': source_id,
+                'match_count': top_k
+            }
+        ).execute()
+        
+        return response.data if response.data else []
+        
+    except Exception as e:
+        print(f"❌ Semantic search error: {e}")
+        # Fallback: Get documents without similarity search
+        try:
+            from supabase_client import supabase
+            response = supabase.table("document_chunks").select("*").eq("user_id", user_id).eq("feature_type", feature_type).eq("source_id", source_id).limit(top_k).execute()
+            return response.data if response.data else []
+        except Exception as fallback_error:
+            print(f"❌ Fallback search also failed: {fallback_error}")
+            return []
+
 def search_similar_docs(query: str, source: str = "all", top_k: int = 5):
     """Search for similar documents across collections"""
     try:

@@ -69,52 +69,130 @@ async def get_pdf_content(pdf_url: str):
 async def generate_response_stream(
     question: str, 
     session_id: str, 
-    pdf_id: str,
-    current_user: dict
+    pdf_id: str = None,
+    current_user: dict = None,
+    csv_id: str = None,
+    web_id: str = None
 ) -> AsyncGenerator[str, None]:
     try:
-        # Get PDF URL from database
-        pdf_response = supabase.table("pdf_files").select("public_url").eq("id", pdf_id).eq("user_id", current_user["id"]).execute()
+        vectorstore = None
+        context_text = ""
         
-        if not pdf_response.data:
-            yield f"data: {json.dumps({'content': 'PDF not found or access denied.'})}\n\n"
-            yield "data: [DONE]\n\n"
-            return
+        # Handle PDF
+        if pdf_id:
+            # Get PDF URL from database
+            pdf_response = supabase.table("pdf_files").select("public_url").eq("id", pdf_id).eq("user_id", current_user["id"]).execute()
             
-        pdf_url = pdf_response.data[0]["public_url"]
+            if not pdf_response.data:
+                yield f"data: {json.dumps({'content': 'PDF not found or access denied.'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+                
+            pdf_url = pdf_response.data[0]["public_url"]
+            
+            # Get or create vector store for the PDF
+            vectorstore = await get_pdf_content(pdf_url)
+            
+            if not vectorstore:
+                yield f"data: {json.dumps({'content': 'Unable to process PDF content.'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
         
-        # Get or create vector store for the PDF
-        vectorstore = await get_pdf_content(pdf_url)
+        # Handle CSV
+        elif csv_id:
+            # Get relevant context from CSV embeddings using semantic search
+            from utils.semantic_search import semantic_search
+            
+            search_results = await semantic_search(
+                query=question,
+                user_id=current_user["id"],
+                feature_type="csv",
+                source_id=csv_id,
+                top_k=5
+            )
+            
+            if search_results:
+                context_text = "\n".join([result["chunk_text"] for result in search_results])
+            else:
+                yield f"data: {json.dumps({'content': 'No relevant CSV data found for your question.'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
         
-        if not vectorstore:
-            yield f"data: {json.dumps({'content': 'Unable to process PDF content.'})}\n\n"
+        # Handle Web
+        elif web_id:
+            # Get relevant context from web embeddings using semantic search
+            from utils.semantic_search import semantic_search
+            
+            search_results = await semantic_search(
+                query=question,
+                user_id=current_user["id"],
+                feature_type="web",
+                source_id=web_id,
+                top_k=5
+            )
+            
+            if search_results:
+                context_text = "\n".join([result["chunk_text"] for result in search_results])
+            else:
+                yield f"data: {json.dumps({'content': 'No relevant web content found for your question.'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+        
+        else:
+            yield f"data: {json.dumps({'content': 'No data source provided.'})}\n\n"
             yield "data: [DONE]\n\n"
             return
         
         # Get conversation memory
         memory = get_or_create_memory(session_id)
         
-        # Get relevant documents
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
-        docs = await asyncio.get_event_loop().run_in_executor(
-            None, 
-            retriever.get_relevant_documents, 
-            question
-        )
+        # Build context and sources based on data type
+        if vectorstore:  # PDF approach
+            # Get relevant documents
+            retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+            docs = await asyncio.get_event_loop().run_in_executor(
+                None, 
+                retriever.get_relevant_documents, 
+                question
+            )
+            
+            # Build context from retrieved documents (top 3 for context)
+            context = "\n\n".join([doc.page_content for doc in docs[:3]])
+            
+            # Extract sources information for display (all 5)
+            sources = []
+            for i, doc in enumerate(docs):
+                source_info = {
+                    "title": f"Page {doc.metadata.get('page', i+1)}",
+                    "content_preview": doc.page_content[:150] + "..." if len(doc.page_content) > 150 else doc.page_content,
+                    "page": doc.metadata.get('page', i+1),
+                    "relevance_score": round(0.95 - i*0.05, 2)
+                }
+                sources.append(source_info)
         
-        # Build context from retrieved documents (top 3 for context)
-        context = "\n\n".join([doc.page_content for doc in docs[:3]])
-        
-        # Extract sources information for display (all 5)
-        sources = []
-        for i, doc in enumerate(docs):
-            source_info = {
-                "title": f"Page {doc.metadata.get('page', i+1)}",
-                "content_preview": doc.page_content[:150] + "..." if len(doc.page_content) > 150 else doc.page_content,
-                "page": doc.metadata.get('page', i+1),
-                "relevance_score": round(0.95 - i*0.05, 2)
-            }
-            sources.append(source_info)
+        else:  # CSV or Web approach
+            context = context_text
+            # For CSV and Web, we'll use simpler source information
+            if csv_id:
+                sources = [{
+                    "title": "CSV Data",
+                    "content_preview": context[:150] + "..." if len(context) > 150 else context,
+                    "page": 1,
+                    "relevance_score": 0.95
+                }]
+            elif web_id:
+                # Get web page title from database
+                web_response = supabase.table("web_pages").select("title, url").eq("id", web_id).eq("user_id", current_user["id"]).execute()
+                web_title = web_response.data[0]["title"] if web_response.data else "Web Content"
+                web_url = web_response.data[0]["url"] if web_response.data else ""
+                
+                sources = [{
+                    "title": web_title,
+                    "content_preview": context[:150] + "..." if len(context) > 150 else context,
+                    "page": 1,
+                    "relevance_score": 0.95,
+                    "url": web_url
+                }]
         
         # Get chat history
         chat_history = memory.chat_memory.messages
@@ -124,8 +202,63 @@ async def generate_response_stream(
                 history_text += f"Human: {msg.content}\n"
             elif isinstance(msg, AIMessage):
                 history_text += f"Assistant: {msg.content}\n"
-            
-        prompt_template = """You are an expert AI assistant specializing in document analysis and comprehension. Your role is to provide comprehensive, accurate, and contextually relevant answers based on PDF content and conversation history.
+        # Create appropriate prompt based on data type
+        if csv_id:
+            prompt_template = """You are an expert AI assistant specializing in data analysis and CSV interpretation. Your role is to provide comprehensive, accurate, and contextually relevant answers based on CSV data and conversation history.
+                ## Instructions:
+                1. **Analyze thoroughly**: Carefully examine the provided CSV data and identify all relevant information
+                2. **Be comprehensive**: Provide detailed explanations, include supporting data points, and elaborate on patterns
+                3. **Reference data**: When possible, mention specific columns, values, or statistics from the CSV
+                4. **Maintain context**: Consider the conversation history to provide cohesive, progressive responses
+                5. **Be precise**: Use exact column names and values from the dataset when applicable
+                6. **Structure clearly**: Organize your response with clear paragraphs, bullet points, or tables when appropriate
+
+                ## Previous Conversation:
+                {chat_history}
+
+                ## CSV Data Context:
+                {context}
+
+                ## Current Question: 
+                {question}
+
+                ## Response Guidelines:
+                - If the information is clearly available in the data, provide a detailed answer with specific references
+                - If the information is partially available, provide what you can and clearly state what aspects need additional data
+                - If the information is not available in the context, explicitly state: "Based on the provided CSV data, I cannot find specific information about [topic]. The dataset contains [brief summary of what the data actually covers]."
+                - Use specific data points, statistics, or patterns from the CSV when relevant
+                - For data analysis, provide insights, trends, or summaries as appropriate
+
+            ## Detailed Answer:"""
+        elif web_id:
+            prompt_template = """You are an expert AI assistant specializing in web content analysis and comprehension. Your role is to provide comprehensive, accurate, and contextually relevant answers based on web page content and conversation history.
+                ## Instructions:
+                1. **Analyze thoroughly**: Carefully examine the provided web content and identify all relevant information
+                2. **Be comprehensive**: Provide detailed explanations, include supporting details, and elaborate on key points
+                3. **Reference content**: When possible, mention specific sections, facts, or concepts from the web page
+                4. **Maintain context**: Consider the conversation history to provide cohesive, progressive responses
+                5. **Be precise**: Use exact terminology and information from the web content when applicable
+                6. **Structure clearly**: Organize your response with clear paragraphs, bullet points, or numbered lists when appropriate
+
+                ## Previous Conversation:
+                {chat_history}
+
+                ## Web Content Context:
+                {context}
+
+                ## Current Question: 
+                {question}
+
+                ## Response Guidelines:
+                - If the information is clearly available in the content, provide a detailed answer with specific references
+                - If the information is partially available, provide what you can and clearly state what aspects need additional information
+                - If the information is not available in the context, explicitly state: "Based on the provided web content, I cannot find specific information about [topic]. The content focuses on [brief summary of what the content actually covers]."
+                - Use examples, quotes, or specific information from the web page when relevant
+                - For complex topics, break down your explanation into logical steps or sections
+
+            ## Detailed Answer:"""
+        else:
+            prompt_template = """You are an expert AI assistant specializing in document analysis and comprehension. Your role is to provide comprehensive, accurate, and contextually relevant answers based on PDF content and conversation history.
                 ## Instructions:
                 1. **Analyze thoroughly**: Carefully examine the provided context and identify all relevant information
                 2. **Be comprehensive**: Provide detailed explanations, include supporting details, and elaborate on key points
