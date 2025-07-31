@@ -64,6 +64,7 @@ class ChatSession(Base):
     feature_type = Column(Enum(FeatureTypeEnum), nullable=False)
     source_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+    agent_type = Column(Text, nullable=True)  # Added to match SQL schema
 
     # Relationships
     user = relationship("User", back_populates="sessions")
@@ -98,25 +99,45 @@ class ChatMessage(Base):
         return f"<ChatMessage(id={self.id}, role={self.role})>"
     
 
-# class DocumentChunk(Base):
-#     __tablename__ = "document_chunks"
 
-#     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-#     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-#     source_id = Column(UUID(as_uuid=True), nullable=False)  # PDF ID, CSV ID, etc.
-#     feature_type = Column(Enum(FeatureTypeEnum), nullable=False)  # 'pdf', 'csv', 'web', etc.
-    
-#     chunk_text = Column(Text, nullable=False)
-#     embedding = Column(Vector(1536), nullable=True)  # 1536 for OpenAI (adjust as needed)
-#     created_at = Column(DateTime, server_default=func.now())
+# DocumentChunk model to match SQL schema
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
 
-#     __table_args__ = (
-#         Index("idx_doc_user", "user_id"),
-#         Index("idx_doc_source", "source_id"),
-#     )
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=False)  # text in SQL, not UUID
+    source_id = Column(UUID(as_uuid=True), nullable=False)
+    feature_type = Column(String, nullable=False)  # text in SQL, not Enum
+    chunk_text = Column(Text, nullable=False)
+    embedding = Column(Text, nullable=True)  # USER-DEFINED in SQL, using Text for compatibility
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-#     def __repr__(self):
-#         return f"<DocumentChunk(id={self.id}, source={self.source_id}, type={self.feature_type})>"
+    __table_args__ = (
+        Index("idx_doc_user", "user_id"),
+        Index("idx_doc_source", "source_id"),
+    )
+
+    def __repr__(self):
+        return f"<DocumentChunk(id={self.id}, source={self.source_id}, type={self.feature_type})>"
+
+
+# WebPage model to match SQL schema
+class WebPage(Base):
+    __tablename__ = "web_pages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=False)  # text in SQL, not UUID
+    url = Column(Text, nullable=False)
+    title = Column(Text, nullable=True)
+    content = Column(Text, nullable=False)
+    meta_description = Column(Text, nullable=True)
+    word_count = Column(Integer, nullable=True)
+    embedding_status = Column(String, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<WebPage(id={self.id}, url={self.url})>"
 
 
 class PdfFile(Base):
