@@ -1,9 +1,9 @@
 from fastapi import Header, HTTPException
 import requests
-from supabase_client import supabase
+from backend.supabase_client import supabase
 import uuid
 import os
-from config import DEFAULT_MODEL, DEFAULT_TEMPERATURE, DEFAULT_MAX_TOKENS
+from backend.config import DEFAULT_MODEL, DEFAULT_TEMPERATURE, DEFAULT_MAX_TOKENS
 
 async def get_current_user(user_id: str = Header(...)):
     try:
@@ -26,20 +26,17 @@ async def get_current_user(user_id: str = Header(...)):
 
         clerk_user = response.json()
 
-        # Handle email_addresses safely
         email_addresses = clerk_user.get("email_addresses", [])
         if not isinstance(email_addresses, list):
             email_addresses = []
         
         primary_email = None
         if email_addresses:
-            # Try to get primary email
             for e in email_addresses:
                 if isinstance(e, dict) and e.get("id") == clerk_user.get("primary_email_address_id"):
                     primary_email = e.get("email_address")
                     break
-            
-            # Fallback to first email if primary not found
+
             if not primary_email and len(email_addresses) > 0:
                 first_email = email_addresses[0]
                 if isinstance(first_email, dict):
@@ -52,13 +49,11 @@ async def get_current_user(user_id: str = Header(...)):
 
         name = f"{clerk_user.get('first_name', '')} {clerk_user.get('last_name', '')}".strip()
 
-        # Check if the user already exists in Supabase
         existing_user = supabase.table("users").select("*").eq("email", primary_email).execute()
 
         if existing_user.data:
             return existing_user.data[0]
 
-        # Create new Supabase user if there is no such user
         new_user = {
             "id": str(uuid.uuid4()),
             "email": primary_email,
@@ -75,3 +70,5 @@ async def get_current_user(user_id: str = Header(...)):
     except Exception as e:
         print(f"Error in get_current_user: {str(e)}")
         raise HTTPException(status_code=401, detail="Authentication failed")
+
+  

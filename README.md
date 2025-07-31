@@ -1,36 +1,185 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NOVA
 
-## Getting Started
+NOVA is a full-stack AI-powered chat and data ingestion platform. It enables users to interact with various data sources (CSV, PDF, web, etc.), manage chat sessions, and orchestrate specialized AI agents for different tasks. The project is built with Next.js (frontend) and Python FastAPI (backend), supporting extensible data ingestion, semantic search, and agent-based workflows.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Table of Contents
+- [NOVA](#nova)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Architecture](#architecture)
+  - [Folder Structure](#folder-structure)
+  - [Setup Instructions](#setup-instructions)
+    - [Prerequisites](#prerequisites)
+    - [1. Clone the Repository](#1-clone-the-repository)
+    - [2. Install Frontend Dependencies](#2-install-frontend-dependencies)
+    - [3. Install Backend Dependencies](#3-install-backend-dependencies)
+    - [4. Set Up Environment Variables](#4-set-up-environment-variables)
+    - [5. Run the Backend Server](#5-run-the-backend-server)
+    - [6. Run the Frontend](#6-run-the-frontend)
+  - [Frontend Usage](#frontend-usage)
+  - [Backend Usage](#backend-usage)
+  - [Development Commands](#development-commands)
+    - [Frontend](#frontend)
+    - [Backend](#backend)
+  - [Extending the Platform](#extending-the-platform)
+  - [Troubleshooting](#troubleshooting)
+  - [Contributors](#contributors)
+  - [Acknowledgements](#acknowledgements)
+
+---
+
+## Features
+- **Chat Sessions**: Multi-agent chat with session management
+- **Data Ingestion**: Import from CSV, PDF, Dev.to, GitHub, HackerNews, Reddit, StackOverflow, and web
+- **Semantic Search**: Vector-based search using ChromaDB
+- **Agent Orchestration**: Specialized agents for different tasks
+- **Authentication**: Clerk-based authentication (backend)
+- **Modern UI**: Built with Next.js, React, and Tailwind CSS
+
+---
+
+## Architecture
+- **Frontend**: Next.js (React, TypeScript)
+- **Backend**: FastAPI (Python 3.12+)
+- **Database**: ChromaDB (vector store), SQLite (default)
+- **Authentication**: Clerk (backend)
+- **State Management**: React hooks
+
+---
+
+## Folder Structure
+```
+NOVA/
+├── actions/                # Next.js server actions
+├── app/                    # Next.js app directory (pages, layouts, dashboard)
+├── backend/                # FastAPI backend (main.py, routes, agents, ingestion, models, utils)
+│   ├── agents/             # Agent orchestration and config
+│   ├── auth/               # Authentication logic
+│   ├── ingestion/          # Data ingestion scripts
+│   ├── models/             # Database models
+│   ├── routes/             # API endpoints
+│   ├── utils/              # Utility functions
+│   └── vectorstore/        # ChromaDB vector store
+├── components/             # React UI components
+├── hooks/                  # Custom React hooks
+├── lib/                    # Frontend utilities
+├── public/                 # Static assets
+├── vectorstore/            # ChromaDB data
+├── package.json            # Frontend dependencies
+├── requirements.txt        # Backend dependencies
+├── README.md               # Project documentation
+└── ...
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup Instructions
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prerequisites
+- Node.js (v18+)
+- Python (3.12+)
+- [ChromaDB](https://www.trychroma.com/) (installed via pip)
+- (Optional) Docker for containerized deployment
 
-## Learn More
+### 1. Clone the Repository
+```bash
+git clone https://github.com/adityavkamath/NOVA.git
+cd NOVA
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Install Frontend Dependencies
+```bash
+npm install
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Install Backend Dependencies
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 4. Set Up Environment Variables
+- Create a `.env` file in `backend/` for backend secrets (e.g., Clerk, database URLs)
+- (Optional) Set up environment variables for Next.js frontend if needed
 
-## Deploy on Vercel
+### 5. Run the Backend Server
+```bash
+cd backend
+uvicorn main:app --reload
+```
+- The backend will be available at `http://localhost:8000`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 6. Run the Frontend
+```bash
+cd .. # from backend/
+npm run dev
+```
+- The frontend will be available at `http://localhost:3000`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Frontend Usage
+- Access the dashboard at `/dashboard`
+- Upload CSV/PDF files, view and chat with data
+- Use sidebar to navigate between chat sessions, agents, and data sources
+- Web scraping and web viewer tools available
+
+---
+
+## Backend Usage
+- API endpoints are defined in `backend/routes/`
+- Ingestion scripts in `backend/ingestion/` can be run directly for batch data import
+- Agent orchestration logic in `backend/agents/`
+- Vector search and embedding logic in `backend/utils/`
+
+---
+
+## Development Commands
+
+### Frontend
+- `npm run dev` — Start Next.js in development mode
+- `npm run build` — Build for production
+- `npm run lint` — Lint code with ESLint
+
+### Backend
+- `uvicorn main:app --reload` — Start FastAPI server (dev mode)
+- `alembic upgrade head` — Run database migrations
+- `python -m backend.ingestion.ingest_csv <file.csv>` — Ingest a CSV file
+
+---
+
+## Extending the Platform
+- **Add a new data source**: Create a new script in `backend/ingestion/` and register its route in `backend/routes/`
+- **Add a new agent**: Implement in `backend/agents/specialized_agents.py` and update orchestrator logic
+- **Add a new UI component**: Place in `components/` and import in the relevant page/layout
+
+---
+
+## Troubleshooting
+- **CORS errors**: Ensure frontend and backend are running on correct ports and CORS is enabled in FastAPI
+- **Database issues**: Check ChromaDB and SQLite files in `vectorstore/`
+- **Authentication errors**: Verify Clerk credentials and environment variables
+- **Dependency issues**: Reinstall with `npm install` or `pip install -r requirements.txt`
+
+---
+
+## Contributors
+- [Aditya V Kamath](https://github.com/adityavkamath)
+- [Harshith Raju](https://github.com/raharsh)
+
+
+---
+
+## Acknowledgements
+- [Next.js](https://nextjs.org/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [ChromaDB](https://www.trychroma.com/)
+- [Clerk](https://clerk.com/)
+
+---
+
+For questions or support, open an issue on GitHub.

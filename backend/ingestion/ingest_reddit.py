@@ -24,10 +24,7 @@ def clean_text(text):
     """Clean and normalize text for embedding"""
     if not text:
         return ""
-    
-    # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text)
-    # Remove special characters but keep basic punctuation
     text = re.sub(r'[^\w\s\-.,!?;:]', '', text)
     return text.strip()
 
@@ -125,7 +122,7 @@ def fetch_posts(tags=TAGS, limit_per_tag=10):
                 doc = Document(
                     page_content=cleaned,
                     metadata={
-                        "title": submission.title,  # Add title field
+                        "title": submission.title,  
                         "url": submission.url,
                         "score": submission.score,
                         "source": "reddit",

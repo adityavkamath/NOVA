@@ -1,10 +1,28 @@
+async def embed_chunks(chunks):
+    """Embed a list of chunk dicts asynchronously and return embeddings."""
+    texts = [chunk.get("chunk_text", chunk.get("content", "")) for chunk in chunks]
+    return embeddings_model.embed_documents(texts)
+
+async def semantic_search(query, chunks, embeddings):
+    """Perform semantic search over embedded chunks and return relevant ones."""
+    # Simple cosine similarity search (replace with your own logic if needed)
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+    query_embedding = embeddings_model.embed_query(query)
+    similarities = cosine_similarity([query_embedding], embeddings)[0]
+    # Attach scores to chunks
+    for i, chunk in enumerate(chunks):
+        chunk["score"] = float(similarities[i])
+    # Sort by score descending
+    sorted_chunks = sorted(chunks, key=lambda c: c["score"], reverse=True)
+    return sorted_chunks[:5]
 import os
 import uuid
 import tempfile
 import requests
 import pandas as pd
 from datetime import datetime
-from supabase_client import supabase
+from backend.supabase_client import supabase
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -13,11 +31,9 @@ from langchain.schema import Document
 
 embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
 
-# Clean text to avoid UnicodeEncodeError from bad surrogate pairs
 def clean_text(text: str) -> str:
-    # Remove null bytes and other problematic characters
-    cleaned = text.replace("\x00", "")  # Remove null characters
-    cleaned = cleaned.encode("utf-8", "ignore").decode("utf-8", "ignore")  # Handle surrogate pairs
+    cleaned = text.replace("\x00", "")  
+    cleaned = cleaned.encode("utf-8", "ignore").decode("utf-8", "ignore")
     return cleaned
 
 
@@ -38,7 +54,6 @@ async def process_pdf_embeddings(pdf_id: str, user_id: str, signed_url: str, fil
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             chunks = splitter.split_documents(documents)
 
-            # Clean texts before embedding
             texts = [clean_text(chunk.page_content) for chunk in chunks]
             embeddings = embeddings_model.embed_documents(texts)
 
@@ -49,7 +64,7 @@ async def process_pdf_embeddings(pdf_id: str, user_id: str, signed_url: str, fil
                     "user_id": user_id,
                     "source_id": pdf_id,
                     "feature_type": "pdf",
-                    "chunk_text": cleaned_text,  # Store cleaned text
+                    "chunk_text": cleaned_text,
                     "embedding": emb,
                     "created_at": datetime.utcnow().isoformat()
                 })
@@ -84,33 +99,28 @@ async def process_csv_embeddings(csv_id: str, user_id: str, signed_url: str, fil
             temp_path = temp_file.name
 
         try:
-            # Read CSV file
             import pandas as pd
             df = pd.read_csv(temp_path)
             
-            # Convert DataFrame to text documents
             documents = []
-            
-            # Create a summary document with column information
+
             column_info = f"CSV Dataset: {filename}\n"
             column_info += f"Columns: {', '.join(df.columns.tolist())}\n"
             column_info += f"Total rows: {len(df)}\n"
             column_info += f"Data types: {df.dtypes.to_string()}\n\n"
-            
-            # Add basic statistics if numeric columns exist
+
             numeric_cols = df.select_dtypes(include=['number']).columns
             if len(numeric_cols) > 0:
                 column_info += "Basic Statistics:\n"
                 column_info += df[numeric_cols].describe().to_string()
             
             documents.append(Document(page_content=column_info, metadata={"type": "summary", "source": filename}))
-            
-            # Convert each row to a document
+
             for idx, row in df.iterrows():
                 row_text = f"Row {idx + 1}:\n"
                 for col in df.columns:
                     value = row[col]
-                    if pd.notna(value):  # Only include non-null values
+                    if pd.notna(value):  
                         row_text += f"{col}: {value}\n"
                 
                 documents.append(Document(
@@ -118,12 +128,11 @@ async def process_csv_embeddings(csv_id: str, user_id: str, signed_url: str, fil
                     metadata={"type": "row", "row_index": idx, "source": filename}
                 ))
 
-            # Also create column-specific documents for better searching
             for col in df.columns:
                 col_values = df[col].dropna().astype(str).tolist()
                 if col_values:
                     col_text = f"Column '{col}' from {filename}:\n"
-                    col_text += f"Sample values: {', '.join(col_values[:20])}"  # First 20 values
+                    col_text += f"Sample values: {', '.join(col_values[:20])}"  
                     if len(col_values) > 20:
                         col_text += f"... and {len(col_values) - 20} more values"
                     
@@ -135,7 +144,6 @@ async def process_csv_embeddings(csv_id: str, user_id: str, signed_url: str, fil
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             chunks = splitter.split_documents(documents)
 
-            # Clean texts before embedding
             texts = [clean_text(chunk.page_content) for chunk in chunks]
             embeddings = embeddings_model.embed_documents(texts)
 
@@ -174,11 +182,9 @@ async def process_web_embeddings(web_id: str, user_id: str, url: str, title: str
     """Process web page content into embeddings and store them"""
     try:
         print(f"Processing web embeddings for {web_id}: {title}")
-        
-        # Create documents from web content
+
         documents = []
-        
-        # Create a summary document with page information
+
         summary_info = f"Web Page: {title}\n"
         summary_info += f"URL: {url}\n"
         summary_info += f"Content Length: {len(content)} characters\n"
@@ -190,18 +196,15 @@ async def process_web_embeddings(web_id: str, user_id: str, url: str, title: str
             metadata={"type": "summary", "source": title, "url": url}
         ))
         
-        # Split the main content into chunks
         main_content_doc = Document(
             page_content=content, 
             metadata={"type": "content", "source": title, "url": url}
         )
         documents.append(main_content_doc)
-        
-        # Use text splitter to break content into manageable chunks
+
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = splitter.split_documents(documents)
-        
-        # Clean texts before embedding
+
         texts = [clean_text(chunk.page_content) for chunk in chunks]
         embeddings = embeddings_model.embed_documents(texts)
         
@@ -216,13 +219,11 @@ async def process_web_embeddings(web_id: str, user_id: str, url: str, title: str
                 "embedding": emb,
                 "created_at": datetime.utcnow().isoformat()
             })
-        
-        # Insert embeddings in batches
+
         batch_size = 50
         for i in range(0, len(insert_data), batch_size):
             supabase.table("document_chunks").insert(insert_data[i:i+batch_size]).execute()
-        
-        # Update web page status
+
         supabase.table("web_pages").update({
             "embedding_status": "completed",
         }).eq("id", web_id).execute()

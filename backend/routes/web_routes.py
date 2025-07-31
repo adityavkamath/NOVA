@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, HttpUrl
-from auth.clerk_auth import get_current_user
-from supabase_client import supabase
+from backend.auth.clerk_auth import get_current_user
+from backend.supabase_client import supabase
 import uuid
 import requests
 import re
 from urllib.parse import urljoin, urlparse
-from utils.embedding_processor import process_web_embeddings
+from backend.utils.embedding_processor import process_web_embeddings
 
 try:
     from bs4 import BeautifulSoup
@@ -28,23 +28,18 @@ class WebPageResponse(BaseModel):
 
 def clean_text(text: str) -> str:
     """Clean and normalize text content"""
-    # Remove extra whitespace and newlines
     text = re.sub(r'\s+', ' ', text)
-    # Remove special characters but keep punctuation
     text = re.sub(r'[^\w\s.,!?;:()-]', '', text)
     return text.strip()
 
 def extract_main_content(soup) -> str:
     """Extract main content from HTML, avoiding navigation, ads, etc."""
-    
-    # Remove script and style elements
+
     for script in soup(["script", "style", "nav", "header", "footer", "aside"]):
         script.decompose()
-    
-    # Try to find main content areas
+
     main_content = ""
-    
-    # Look for common content containers
+
     content_selectors = [
         'main', 'article', '[role="main"]', '.content', '.post-content', 
         '.entry-content', '.article-body', '.story-body', '#content'
@@ -55,13 +50,11 @@ def extract_main_content(soup) -> str:
         if content_elem:
             main_content = content_elem.get_text()
             break
-    
-    # If no main content found, get all paragraph text
+
     if not main_content:
         paragraphs = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
         main_content = ' '.join([p.get_text() for p in paragraphs])
-    
-    # Clean the text
+
     main_content = clean_text(main_content)
     
     return main_content
@@ -78,12 +71,10 @@ async def scrape_web_url(
         user_id = current_user["id"]
         
         print(f"Scraping URL: {url} for user: {user_id}")
-        
-        # Check if URL already exists for this user
+
         existing_response = supabase.table("web_pages").select("*").eq("user_id", user_id).eq("url", url).execute()
         
         if existing_response.data:
-            # Return existing entry
             existing_page = existing_response.data[0]
             return {
                 "success": True,
@@ -97,8 +88,7 @@ async def scrape_web_url(
                     "embedding_status": existing_page["embedding_status"]
                 }
             }
-        
-        # Set up headers to mimic a real browser
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -106,27 +96,21 @@ async def scrape_web_url(
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
         }
-        
-        # Check if BeautifulSoup is available
+
         if BeautifulSoup is None:
             raise HTTPException(status_code=500, detail="BeautifulSoup4 is not installed")
-        
-        # Fetch the web page
+
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
-        
-        # Parse the HTML
+
         soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Extract title
+
         title = soup.find('title')
         title = title.get_text().strip() if title else urlparse(url).netloc
-        
-        # Extract meta description
+
         meta_desc = soup.find('meta', attrs={'name': 'description'})
         meta_description = meta_desc.get('content', '') if meta_desc else ''
-        
-        # Extract main content
+
         content = extract_main_content(soup)
         
         if len(content) < 100:
@@ -134,8 +118,7 @@ async def scrape_web_url(
         
         word_count = len(content.split())
         web_id = str(uuid.uuid4())
-        
-        # Store in database
+
         web_data = {
             "id": web_id,
             "user_id": user_id,
@@ -151,8 +134,7 @@ async def scrape_web_url(
         
         if not insert_result.data:
             raise HTTPException(status_code=500, detail="Failed to store web page data")
-        
-        # Process embeddings in background
+
         print(f"Starting web content embedding processing for {web_id}")
         await process_web_embeddings(web_id, user_id, url, title, content)
         
@@ -217,26 +199,21 @@ async def delete_web_page(
     """Delete a web page and its associated data"""
     
     try:
-        # Check if web page exists and belongs to user
         response = supabase.table("web_pages").select("id").eq("id", web_id).eq("user_id", current_user["id"]).execute()
         
         if not response.data:
             raise HTTPException(status_code=404, detail="Web page not found")
-        
-        # Delete associated document chunks
+
         supabase.table("document_chunks").delete().eq("source_id", web_id).eq("feature_type", "web").execute()
-        
-        # Delete associated chat sessions
+
         sessions_response = supabase.table("chat_sessions").select("id").eq("source_id", web_id).eq("feature_type", "web").execute()
         
         for session in sessions_response.data:
             session_id = session["id"]
-            # Delete chat messages
             supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
-            # Delete session
             supabase.table("chat_sessions").delete().eq("id", session_id).execute()
         
-        # Delete the web page
+
         supabase.table("web_pages").delete().eq("id", web_id).execute()
         
         return {

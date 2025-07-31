@@ -17,10 +17,7 @@ def clean_text(text):
     """Clean and normalize text for embedding"""
     if not text:
         return ""
-    
-    # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text)
-    # Remove special characters but keep basic punctuation
     text = re.sub(r'[^\w\s\-.,!?;:]', '', text)
     return text.strip()
 
@@ -43,7 +40,7 @@ embedding_func = embedding_functions.OpenAIEmbeddingFunction(
 collection = client.get_or_create_collection("devto", embedding_function=embedding_func)
 
 
-def fetch_dev_articles(tag, limit=10):
+def fetch_dev_articles(tag, limit=100):
     """Fetch DEV.to articles for a specific tag"""
     url = "https://dev.to/api/articles"
     
@@ -87,7 +84,7 @@ def main():
                 cleaned = clean_text(content)
 
                 metadata = {
-                    "title": article.get("title") or "No title",  # Add title field
+                    "title": article.get("title") or "No title", 
                     "url": article.get("url") or "",
                     "source": "devto",
                     "tags": tag,  

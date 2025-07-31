@@ -1,10 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header
-from auth.clerk_auth import get_current_user
-from supabase_client import supabase
-from config import SUPABASE_STORAGE_BUCKET_NAME
+from backend.auth.clerk_auth import get_current_user
+from backend.supabase_client import supabase
+from backend.config import SUPABASE_STORAGE_BUCKET_NAME
 import uuid
 
-from utils.embedding_processor import process_csv_embeddings
+from backend.utils.embedding_processor import process_csv_embeddings
 
 router = APIRouter()
 BUCKET = SUPABASE_STORAGE_BUCKET_NAME
@@ -15,28 +15,25 @@ async def upload_csv(
     current_user: dict = Depends(get_current_user)
 ):
     print(f"CSV upload attempt - User: {current_user.get('id')}, File: {file.filename}, Content-Type: {file.content_type}")
-    
-    # More flexible CSV file validation
+
     if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
     
-    # Accept common CSV content types and also allow text/plain
     allowed_types = [
         "text/csv", 
         "application/csv", 
         "application/vnd.ms-excel",
-        "text/plain",  # Many CSV files are uploaded as text/plain
-        "application/octet-stream"  # Some browsers send this for CSV
+        "text/plain", 
+        "application/octet-stream"
     ]
     
     if file.content_type not in allowed_types:
-        print(f"Received content type: {file.content_type}")  # Debug log
-        # Still allow if filename ends with .csv
+        print(f"Received content type: {file.content_type}")  
         if not file.filename.lower().endswith('.csv'):
             raise HTTPException(status_code=400, detail=f"Invalid file type: {file.content_type}. Only CSV files are allowed")
 
     contents = await file.read()
-    if len(contents) > 100 * 1024 * 1024:  # 100MB limit for CSV
+    if len(contents) > 50 * 1024 * 1024: 
         raise HTTPException(status_code=400, detail="File size must be under 100MB")
 
     try:
@@ -57,7 +54,7 @@ async def upload_csv(
         print(f"Upload response: {upload_response}")
 
         signed_url_response = supabase.storage.from_(BUCKET).create_signed_url(
-            supabase_path, 604800  # 7 days
+            supabase_path, 604800  
         )
         signed_url = signed_url_response.get("signedURL")
         if not signed_url:
@@ -77,7 +74,6 @@ async def upload_csv(
         
         print(f"Insert result: {insert_result}")
 
-        # Convert the CSV into embeddings and store it in supabase
         print(f"Starting CSV embedding processing for {csv_id}")
         await process_csv_embeddings(
             csv_id=csv_id,
@@ -103,7 +99,6 @@ async def upload_csv(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-# To get individual CSV details by its id
 @router.get("/{csv_id}")
 async def get_csv(csv_id: str, user_id: str = Header(None, alias="user-id")):
     try:
@@ -114,24 +109,21 @@ async def get_csv(csv_id: str, user_id: str = Header(None, alias="user-id")):
             raise HTTPException(status_code=401, detail="User ID header is required")
         
         current_user = await get_current_user(user_id)
-        
-        # Fetch CSV details of the current user only
+
         response = supabase.table("csv_datasets").select("*").eq("id", csv_id).eq("user_id", current_user["id"]).execute()
         
         if not response.data:
             raise HTTPException(status_code=404, detail="CSV not found or you don't have permission to access it")
         
         csv_data = response.data[0]
-        
-        # Generate signed URL for the CSV file
+
         signed_url_response = supabase.storage.from_(BUCKET).create_signed_url(
-            csv_data["supabase_path"], 604800  # 7 days
+            csv_data["supabase_path"], 604800 
         )
         signed_url = signed_url_response.get("signedURL")
         if not signed_url:
             raise HTTPException(status_code=500, detail="Failed to generate signed URL")
-        
-        # Add the signed URL to the response
+
         csv_data["public_url"] = signed_url
         
         return csv_data
