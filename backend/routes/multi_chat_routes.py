@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
-from auth.clerk_auth import get_current_user
-from utils.semantic_search import search_similar_docs, get_available_sources, check_collections_status
-from utils.llm_answer import generate_answer, is_python_question
-from supabase_client import supabase
+from backend.auth.clerk_auth import get_current_user
+from backend.utils.semantic_search import search_similar_docs, get_available_sources, check_collections_status
+from backend.utils.llm_answer import generate_answer, is_python_question
+from backend.supabase_client import supabase
 from typing import List, Optional
 import uuid
 
@@ -48,7 +48,6 @@ async def semantic_search(
     """Perform semantic search across the chroma database"""
     print(f"🔍 Multi-chat Query: {query}, Source: {source}")
 
-    # Check if it's a Python-related question
     if not is_python_question(query):
         return {
             "answer": "❌ Sorry, I only assist with Python-related queries.",
@@ -57,7 +56,6 @@ async def semantic_search(
             "sources_used": []
         }
 
-    # Search for similar documents
     docs = search_similar_docs(query, source=source, top_k=5)
     if not docs:
         return {
@@ -67,15 +65,12 @@ async def semantic_search(
             "sources_used": []
         }
 
-    # Prepare context for LLM
     context = "\n\n".join([f"Source: {doc['source']}\nTitle: {doc.get('title', 'No title')}\nContent: {doc['text']}" for doc in docs])
     top_doc = docs[0]
 
-    # Generate answer using LLM
     answer = generate_answer(query, context, source=top_doc["source"])
     print(f"✅ Multi-chat Answer: {answer[:100]}...")
 
-    # Get sources used
     sources_used = list(set([doc["source"] for doc in docs]))
 
     return {
@@ -132,10 +127,6 @@ async def get_collections_status(current_user: dict = Depends(get_current_user))
         print(f"Error getting collection status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# =============================================================================
-# CHAT SESSION MANAGEMENT ENDPOINTS
-# =============================================================================
-
 @router.post("/sessions")
 async def create_chat_session(
     request: CreateSessionRequest,
@@ -143,14 +134,13 @@ async def create_chat_session(
 ):
     """Create a new multi-source chat session"""
     try:
-        # Create new chat session using Supabase client
         session_id = str(uuid.uuid4())
         session_data = {
             "id": session_id,
             "user_id": current_user["id"],
             "title": request.title,
             "feature_type": "multi_source",
-            "source_id": None,  # Multi-source doesn't have a specific source
+            "source_id": None,  
         }
 
         insert_result = supabase.table("chat_sessions").insert(session_data).execute()
@@ -175,7 +165,6 @@ async def get_chat_sessions(
 ):
     """Get all multi-source chat sessions for the current user"""
     try:
-        # Get sessions using Supabase client
         response = supabase.table("chat_sessions").select("*").eq("user_id", current_user["id"]).eq("feature_type", "multi_source").order("created_at", desc=True).execute()
         
         return {
@@ -201,12 +190,10 @@ async def get_chat_messages(
 ):
     """Get all messages for a specific chat session"""
     try:
-        # Verify session belongs to user
         session_response = supabase.table("chat_sessions").select("id").eq("id", session_id).eq("user_id", current_user["id"]).execute()
         if not session_response.data:
             raise HTTPException(status_code=404, detail="Session not found")
-        
-        # Get messages for the session
+
         messages_response = supabase.table("chat_messages").select("*").eq("session_id", session_id).order("timestamp", desc=False).execute()
         
         return {
@@ -233,12 +220,10 @@ async def send_message(
 ):
     """Send a message and get AI response with database storage"""
     try:
-        # Verify session belongs to user
         session_response = supabase.table("chat_sessions").select("id").eq("id", request.session_id).eq("user_id", current_user["id"]).execute()
         if not session_response.data:
             raise HTTPException(status_code=404, detail="Session not found")
-        
-        # Store user message
+
         user_message_data = {
             "id": str(uuid.uuid4()),
             "session_id": request.session_id,
@@ -247,64 +232,55 @@ async def send_message(
         }
         
         user_result = supabase.table("chat_messages").insert(user_message_data).execute()
-        
-        # Check if it's a Python-related question
+
         if not is_python_question(request.message):
             ai_response = "❌ Sorry, I only assist with Python-related queries."
             docs = []
             sources_used = []
             detailed_sources = []
         else:
-            # Search for similar documents
             docs = search_similar_docs(request.message, source=request.source, top_k=5)
             if not docs:
                 ai_response = "No relevant information found."
                 sources_used = []
                 detailed_sources = []
             else:
-                # Prepare context for LLM
                 context = "\n\n".join([f"Source: {doc['source']}\nTitle: {doc.get('title', 'No title')}\nContent: {doc['text']}" for doc in docs])
                 top_doc = docs[0]
-                
-                # Generate answer using LLM
+
                 ai_response = generate_answer(request.message, context, source=top_doc["source"])
                 sources_used = list(set([doc["source"] for doc in docs]))
-                
-                # Prepare detailed sources for storage
+
                 detailed_sources = []
-                for doc in docs[:5]:  # Top 5 sources
+                for doc in docs[:5]: 
                     source_info = {
                         "title": doc.get("title", f"{doc['source'].title()} Content"),
                         "url": doc.get("url"),
                         "content_preview": doc["text"][:200] + "..." if len(doc["text"]) > 200 else doc["text"],
                         "source_platform": doc["source"],
-                        "relevance_score": round(1 - doc["score"], 3)  # Convert distance to relevance (1 - distance)
+                        "relevance_score": round(1 - doc["score"], 3) 
                     }
                     detailed_sources.append(source_info)
-        
-        # Store AI message with detailed sources
+
         ai_message_data = {
             "id": str(uuid.uuid4()),
             "session_id": request.session_id,
             "role": "ai_agent",
             "message": ai_response,
         }
-        
-        # Add detailed sources if available - store as JSON string
+
         if detailed_sources:
             import json
             try:
                 ai_message_data["sources"] = json.dumps(detailed_sources)
             except Exception as e:
                 print(f"Error serializing detailed sources: {e}")
-                # Fallback to simple source names
                 ai_message_data["sources"] = json.dumps(sources_used) if sources_used else None
         
         try:
             ai_result = supabase.table("chat_messages").insert(ai_message_data).execute()
         except Exception as e:
             print(f"Error inserting AI message: {e}")
-            # Try without sources if there's an issue
             ai_message_data.pop("sources", None)
             ai_result = supabase.table("chat_messages").insert(ai_message_data).execute()
         

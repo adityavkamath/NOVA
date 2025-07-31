@@ -20,9 +20,7 @@ def clean_text(text):
     if not text:
         return ""
 
-    # Remove excessive whitespace
     text = re.sub(r"\s+", " ", text)
-    # Remove special characters but keep basic punctuation
     text = re.sub(r"[^\w\s\-.,!?;:]", "", text)
     return text.strip()
 
@@ -82,7 +80,7 @@ collection = client.get_or_create_collection(
 )
 
 
-def fetch_hn_posts(query, limit=10):
+def fetch_hn_posts(query, limit=200):
     """Fetch Hacker News posts for a specific query"""
     url = "https://hn.algolia.com/api/v1/search"
     params = {"query": query, "tags": "story", "hitsPerPage": limit}
@@ -130,7 +128,7 @@ def main():
                 metadata = {
                     "url": url,
                     "source": "hackernews",
-                    "title": post.get("title", ""),  # Add the title to metadata
+                    "title": post.get("title", ""), 
                     "tags": query,
                     "points": post.get("points", 0),
                     "num_comments": post.get("num_comments", 0),

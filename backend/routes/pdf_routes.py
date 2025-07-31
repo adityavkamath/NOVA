@@ -1,18 +1,18 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header
-from auth.clerk_auth import get_current_user
-from supabase_client import supabase
-from config import SUPABASE_STORAGE_BUCKET_NAME
+from backend.auth.clerk_auth import get_current_user
+from backend.supabase_client import supabase
+from backend.config import SUPABASE_STORAGE_BUCKET_NAME
 import uuid
 
-from utils.embedding_processor import process_pdf_embeddings
+from backend.utils.embedding_processor import process_pdf_embeddings
 
 router = APIRouter()
 BUCKET = SUPABASE_STORAGE_BUCKET_NAME
 
+
 @router.post("/upload-pdf")
 async def upload_pdf(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
+    file: UploadFile = File(...), current_user: dict = Depends(get_current_user)
 ):
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
@@ -31,7 +31,7 @@ async def upload_pdf(
             {
                 "content-type": "application/pdf",
                 "x-upsert": "false",
-            }
+            },
         )
 
         signed_url_response = supabase.storage.from_(BUCKET).create_signed_url(
@@ -42,21 +42,26 @@ async def upload_pdf(
             raise HTTPException(status_code=500, detail="Failed to generate signed URL")
 
         pdf_id = str(uuid.uuid4())
-        insert_result = supabase.table("pdf_files").insert({
-            "id": pdf_id,
-            "user_id": current_user["id"],
-            "filename": file.filename,
-            "supabase_path": supabase_path,
-            "embedding_status": "pending",
-            "public_url": signed_url,
-        }).execute()
+        insert_result = (
+            supabase.table("pdf_files")
+            .insert(
+                {
+                    "id": pdf_id,
+                    "user_id": current_user["id"],
+                    "filename": file.filename,
+                    "supabase_path": supabase_path,
+                    "embedding_status": "pending",
+                    "public_url": signed_url,
+                }
+            )
+            .execute()
+        )
 
-        # Convert the pdf into embeddings and store it in supabase
         await process_pdf_embeddings(
             pdf_id=pdf_id,
             user_id=current_user["id"],
             signed_url=signed_url,
-            filename=file.filename
+            filename=file.filename,
         )
 
         return {
@@ -67,33 +72,45 @@ async def upload_pdf(
                 "filename": file.filename,
                 "path": supabase_path,
                 "url": signed_url,
-            }
+            },
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-# To get individual pdf details by its id
+
 @router.get("/{pdf_id}")
 async def get_pdf(pdf_id: str, user_id: str = Header(None, alias="user-id")):
     try:
-        if not pdf_id:
+        if not pdf_id or pdf_id == "null":
             raise HTTPException(status_code=400, detail="PDF ID is required")
-        
+        try:
+            uuid.UUID(pdf_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid PDF ID format")
+
         if not user_id:
             raise HTTPException(status_code=401, detail="User ID header is required")
-        
+
         current_user = await get_current_user(user_id)
-        
-        # Fetch PDF details of the current user only
-        response = supabase.table("pdf_files").select("*").eq("id", pdf_id).eq("user_id", current_user["id"]).execute()
-        
+
+        response = (
+            supabase.table("pdf_files")
+            .select("*")
+            .eq("id", pdf_id)
+            .eq("user_id", current_user["id"])
+            .execute()
+        )
+
         if not response.data:
-            raise HTTPException(status_code=404, detail="PDF not found or you don't have permission to access it")
-        
+            raise HTTPException(
+                status_code=404,
+                detail="PDF not found or you don't have permission to access it",
+            )
+
         pdf_data = response.data[0]
         return pdf_data
-        
+
     except HTTPException:
         raise
     except Exception as e:

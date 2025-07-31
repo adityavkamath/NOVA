@@ -18,10 +18,8 @@ def clean_text(text):
     """Clean and normalize text for embedding"""
     if not text:
         return ""
-    
-    # Remove excessive whitespace
+
     text = re.sub(r'\s+', ' ', text)
-    # Remove special characters but keep basic punctuation
     text = re.sub(r'[^\w\s\-.,!?;:]', '', text)
     return text.strip()
 
@@ -60,7 +58,7 @@ collection = client.get_or_create_collection(
 )
 
 
-def fetch_discussions(owner, repo, limit=10):
+def fetch_discussions(owner, repo, limit=50):
     """Fetch GitHub discussions for a repository"""
     url = "https://api.github.com/graphql"
     query = """

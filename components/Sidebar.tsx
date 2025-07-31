@@ -14,6 +14,7 @@ import {
   Trash2,
   MoreHorizontal,
   Loader2,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +41,15 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const { chatSessions, loading, error, refetch } = useChatSessions();
 
   const features = [
+    {
+      id: "agents",
+      name: "Agents",
+      icon: Users,
+      color: "text-purple-400",
+      hoverColor: "hover:bg-purple-400/10 hover:border-purple-400/30",
+      description: "AutoGen AI Agent Chat",
+      goTo: "agents",
+    },
     {
       id: "pdf",
       name: "PDF",
@@ -88,6 +98,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         return Globe;
       case "multi_source":
         return Database;
+      case "agent_chat":
+        return Users;
       default:
         return MessageSquarePlus;
     }
@@ -103,6 +115,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         return "text-blue-400";
       case "multi_source":
         return "text-green-400";
+      case "agent_chat":
+        return "text-purple-400";
       default:
         return "text-gray-400";
     }
@@ -118,6 +132,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         return "web-chat";
       case "multi_source":
         return "multiple-sources-chat";
+      case "agent_chat":
+        return "agents";
       default:
         return "pdf-chat";
     }
@@ -126,15 +142,16 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const handleChatClick = (chat: ChatSession) => {
     setActiveChat(chat.id);
     const featureRoute = getFeatureRoute(chat.feature_type);
-    
-    // For multi-source chats, go directly to the page with sessionId
-    if (chat.feature_type === "multi_source") {
-      router.push(`/dashboard/chats/${featureRoute}?sessionId=${chat.id}`);
+    // For agent chats, load agent chat history in dedicated agent chat page/component
+    if (chat.feature_type === "agent_chat") {
+      // Use a dedicated route for agent chat sessions (e.g., /dashboard/agents/session/[sessionId])
+      router.push(`/dashboard/agents/session/${chat.id}`);
+    } else if (chat.feature_type === "multi_source") {
+      router.push(`/dashboard/${featureRoute}?sessionId=${chat.id}`);
     } else {
-      // For other types, navigate with source_id
       router.push(`/dashboard/chats/${featureRoute}/${chat.source_id}?sessionId=${chat.id}`);
     }
-  };
+  }
 
   const handleDeleteChat = async (chat: ChatSession, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -293,7 +310,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
                   }
                 >
                   <Link
-                    href={`/dashboard/chats/${feature.goTo}`}
+                    href={feature.goTo === "agents" ? `/dashboard/${feature.goTo}` : `/dashboard/chats/${feature.goTo}`}
                     className="flex justify-center items-center space-x-4 w-full"
                   >
                     <Icon

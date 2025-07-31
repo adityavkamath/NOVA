@@ -1,19 +1,19 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from auth.clerk_auth import get_current_user
-from supabase_client import supabase
+from backend.auth.clerk_auth import get_current_user
+from backend.supabase_client import supabase
 from typing import Optional
 import uuid
 import json
-from utils.chat_processing import get_or_create_memory, generate_response_stream
+from backend.utils.chat_processing import get_or_create_memory, generate_response_stream
 
 router = APIRouter()
 
 class CreateChatSessionRequest(BaseModel):
     title: str
     feature_type: str 
-    source_id: str     # PDF ID or other source ID
+    source_id: str    
 
 class ChatSessionResponse(BaseModel):
     id: str
@@ -29,7 +29,6 @@ async def create_chat_session(
     current_user: dict = Depends(get_current_user)
 ):
     try:
-        # Validate that the source (PDF / CSV etc) belongs to the current user if source_id is provided
         if request.source_id:
             if request.feature_type == "pdf":
                 pdf_response = supabase.table("pdf_files").select("id").eq("id", request.source_id).eq("user_id", current_user["id"]).execute()
@@ -40,7 +39,6 @@ async def create_chat_session(
                 if not csv_response.data:
                     raise HTTPException(status_code=404, detail="CSV not found or you don't have permission to access it")
 
-        # Create new chat session
         session_id = str(uuid.uuid4())
         session_data = {
             "id": session_id,
@@ -82,8 +80,7 @@ async def get_chat_session(
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="Session ID is required")
-        
-        # Fetch chat session details of the current user only
+
         response = supabase.table("chat_sessions").select("*").eq("id", session_id).eq("user_id", current_user["id"]).execute()
         
         if not response.data:
@@ -111,16 +108,13 @@ async def get_user_chat_sessions(
     """Get all chat sessions for the current user"""
     try:
         query = supabase.table("chat_sessions").select("*").eq("user_id", current_user["id"])
-        
-        # Filter by feature type if provided
+
         if feature_type:
             query = query.eq("feature_type", feature_type)
-        
-        # Filter by source_id if provided
+
         if source_id:
             query = query.eq("source_id", source_id)
-        
-        # Apply limit
+
         query = query.limit(limit).order("created_at", desc=True)
         
         response = query.execute()
@@ -144,17 +138,14 @@ async def delete_chat_session(
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="Session ID is required")
-        
-        # First, verify the session belongs to the current user
+
         session_response = supabase.table("chat_sessions").select("id").eq("id", session_id).eq("user_id", current_user["id"]).execute()
         
         if not session_response.data:
             raise HTTPException(status_code=404, detail="Chat session not found or you don't have permission to delete it")
-        
-        # Delete all messages in the session first (due to foreign key constraint)
+
         supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
-        
-        # Then delete the session
+
         delete_result = supabase.table("chat_sessions").delete().eq("id", session_id).eq("user_id", current_user["id"]).execute()
         
         return {
@@ -168,7 +159,6 @@ async def delete_chat_session(
         print(f"Debug: Exception occurred while deleting chat session: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Route to get messages for a specific chat session
 @router.get("/{session_id}/messages")
 async def get_chat_messages(
     session_id: str,
@@ -179,14 +169,12 @@ async def get_chat_messages(
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="Session ID is required")
-        
-        # First verify the session belongs to the current user
+
         session_response = supabase.table("chat_sessions").select("id").eq("id", session_id).eq("user_id", current_user["id"]).execute()
         
         if not session_response.data:
             raise HTTPException(status_code=404, detail="Chat session not found or you don't have permission to access it")
-        
-        # Get messages for the session
+
         messages_response = supabase.table("chat_messages").select("*").eq("session_id", session_id).limit(limit).order("timestamp", desc=False).execute()
         
         return {
@@ -216,26 +204,22 @@ async def send_message(
 ):
     try:
         print(f"DEBUG: send_message received - session_id: {request.session_id}, pdf_id: {request.pdf_id}, csv_id: {request.csv_id}, web_id: {request.web_id}")
-        
-        # Verify session belongs to user
+
         session_response = supabase.table("chat_sessions").select("id").eq("id", request.session_id).eq("user_id", current_user["id"]).execute()
         
         if not session_response.data:
             raise HTTPException(status_code=404, detail="Chat session not found")
-        
-        # Save user message to database
+
         user_message_data = {
             "id": str(uuid.uuid4()),
             "session_id": request.session_id,
             "role": "user",
             "message": request.message,
             "tokens_used": len(request.message.split()),  
-            # "timestamp": datetime.utcnow().isoformat()
         }
         
         supabase.table("chat_messages").insert(user_message_data).execute()
-        
-        # Create streaming response function
+
         async def generate_and_save_response():
             assistant_message_id = str(uuid.uuid4())
             assistant_response = ""
@@ -248,7 +232,6 @@ async def send_message(
                 csv_id=request.csv_id,
                 web_id=request.web_id
             ):
-                # Extract content from chunk
                 if chunk.startswith("data: ") and not chunk.endswith("[DONE]\n\n"):
                     try:
                         data = json.loads(chunk[6:])
@@ -258,15 +241,13 @@ async def send_message(
                         pass
                 
                 yield chunk
-            
-            # Save assistant message to database
+
             assistant_message_data = {
                 "id": assistant_message_id,
                 "session_id": request.session_id,
                 "role": "ai_agent",
                 "message": assistant_response.strip(),
                 "tokens_used": len(assistant_response.split()),
-                # "timestamp": datetime.utcnow().isoformat()
             }
             
             supabase.table("chat_messages").insert(assistant_message_data).execute()
@@ -297,19 +278,16 @@ async def get_chat_messages(
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="Session ID is required")
-        
-        # First verify the session belongs to the current user
+
         session_response = supabase.table("chat_sessions").select("id").eq("id", session_id).eq("user_id", current_user["id"]).execute()
         
         if not session_response.data:
             raise HTTPException(status_code=404, detail="Chat session not found or you don't have permission to access it")
-        
-        # Get messages for the session
+
         messages_response = supabase.table("chat_messages").select("*").eq("session_id", session_id).limit(limit).order("timestamp", desc=False).execute()
-        
-        # Load messages into memory for context
+
         memory = get_or_create_memory(session_id)
-        memory.clear()  # Clear existing memory
+        memory.clear() 
         
         for msg in messages_response.data:
             if msg["role"] == "user":

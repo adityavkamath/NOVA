@@ -1,4 +1,4 @@
-from supabase_client import supabase
+from backend.supabase_client import supabase
 from typing import AsyncGenerator
 import json
 import asyncio
@@ -29,9 +29,8 @@ class StreamingCallbackHandler(BaseCallbackHandler):
     
     def on_llm_end(self, *args, **kwargs) -> None:
         self.done = True
-        self.token_queue.put(None)  # Sentinel value to indicate completion
+        self.token_queue.put(None) 
 
-# Global memory store (in production, use Redis or similar)
 memory_store = {}
 
 def get_or_create_memory(session_id: str) -> ConversationBufferMemory:
@@ -39,25 +38,22 @@ def get_or_create_memory(session_id: str) -> ConversationBufferMemory:
         memory_store[session_id] = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True,
-            output_key="answer"  # Specify which key to store in memory
+            output_key="answer" 
         )
     return memory_store[session_id]
 
 async def get_pdf_content(pdf_url: str):
     """Extract text content from PDF URL and create vector store"""
     try:
-        # Download and load PDF
         loader = PyPDFLoader(pdf_url)
         documents = loader.load()
-        
-        # Split documents into chunks
+
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
         )
         texts = text_splitter.split_documents(documents)
         
-        # Create embeddings and vector store
         embeddings = OpenAIEmbeddings()
         vectorstore = FAISS.from_documents(texts, embeddings)
         
@@ -77,10 +73,8 @@ async def generate_response_stream(
     try:
         vectorstore = None
         context_text = ""
-        
-        # Handle PDF
+
         if pdf_id:
-            # Get PDF URL from database
             pdf_response = supabase.table("pdf_files").select("public_url").eq("id", pdf_id).eq("user_id", current_user["id"]).execute()
             
             if not pdf_response.data:
@@ -90,7 +84,6 @@ async def generate_response_stream(
                 
             pdf_url = pdf_response.data[0]["public_url"]
             
-            # Get or create vector store for the PDF
             vectorstore = await get_pdf_content(pdf_url)
             
             if not vectorstore:
@@ -98,11 +91,8 @@ async def generate_response_stream(
                 yield "data: [DONE]\n\n"
                 return
         
-        # Handle CSV
         elif csv_id:
-            # Get relevant context from CSV embeddings using semantic search
-            from utils.semantic_search import semantic_search
-            
+            from backend.utils.semantic_search import semantic_search
             search_results = await semantic_search(
                 query=question,
                 user_id=current_user["id"],
@@ -110,18 +100,30 @@ async def generate_response_stream(
                 source_id=csv_id,
                 top_k=5
             )
-            
-            if search_results:
-                context_text = "\n".join([result["chunk_text"] for result in search_results])
-            else:
-                yield f"data: {json.dumps({'content': 'No relevant CSV data found for your question.'})}\n\n"
+            # Defensive: handle error dicts and strings
+            if not search_results or (isinstance(search_results, list) and len(search_results) == 0):
+                # No chunks, but still send empty context to LLM
+                context_text = ""
+            elif isinstance(search_results, str):
+                yield f"data: {json.dumps({'error': search_results})}\n\n"
                 yield "data: [DONE]\n\n"
                 return
+            else:
+                # If search_results is a list, check for error dicts
+                error_found = False
+                for result in search_results:
+                    if isinstance(result, dict) and result.get("error"):
+                        yield f"data: {json.dumps({'error': result['error']})}\n\n"
+                        yield "data: [DONE]\n\n"
+                        error_found = True
+                        break
+                if error_found:
+                    return
+                # Otherwise, build context_text
+                context_text = "\n".join([result["chunk_text"] for result in search_results if isinstance(result, dict) and "chunk_text" in result])
         
-        # Handle Web
         elif web_id:
-            # Get relevant context from web embeddings using semantic search
-            from utils.semantic_search import semantic_search
+            from backend.utils.semantic_search import semantic_search
             
             search_results = await semantic_search(
                 query=question,
@@ -142,24 +144,19 @@ async def generate_response_stream(
             yield f"data: {json.dumps({'content': 'No data source provided.'})}\n\n"
             yield "data: [DONE]\n\n"
             return
-        
-        # Get conversation memory
+
         memory = get_or_create_memory(session_id)
-        
-        # Build context and sources based on data type
-        if vectorstore:  # PDF approach
-            # Get relevant documents
+
+        if vectorstore:
             retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
             docs = await asyncio.get_event_loop().run_in_executor(
                 None, 
                 retriever.get_relevant_documents, 
                 question
             )
-            
-            # Build context from retrieved documents (top 3 for context)
+
             context = "\n\n".join([doc.page_content for doc in docs[:3]])
-            
-            # Extract sources information for display (all 5)
+
             sources = []
             for i, doc in enumerate(docs):
                 source_info = {
@@ -170,9 +167,8 @@ async def generate_response_stream(
                 }
                 sources.append(source_info)
         
-        else:  # CSV or Web approach
+        else:
             context = context_text
-            # For CSV and Web, we'll use simpler source information
             if csv_id:
                 sources = [{
                     "title": "CSV Data",
@@ -181,7 +177,6 @@ async def generate_response_stream(
                     "relevance_score": 0.95
                 }]
             elif web_id:
-                # Get web page title from database
                 web_response = supabase.table("web_pages").select("title, url").eq("id", web_id).eq("user_id", current_user["id"]).execute()
                 web_title = web_response.data[0]["title"] if web_response.data else "Web Content"
                 web_url = web_response.data[0]["url"] if web_response.data else ""
@@ -193,16 +188,14 @@ async def generate_response_stream(
                     "relevance_score": 0.95,
                     "url": web_url
                 }]
-        
-        # Get chat history
+
         chat_history = memory.chat_memory.messages
         history_text = ""
-        for msg in chat_history[-6:]:  # Last 3 exchanges
+        for msg in chat_history[-6:]: 
             if isinstance(msg, HumanMessage):
                 history_text += f"Human: {msg.content}\n"
             elif isinstance(msg, AIMessage):
                 history_text += f"Assistant: {msg.content}\n"
-        # Create appropriate prompt based on data type
         if csv_id:
             prompt_template = """You are an expert AI assistant specializing in data analysis and CSV interpretation. Your role is to provide comprehensive, accurate, and contextually relevant answers based on CSV data and conversation history.
                 ## Instructions:
@@ -285,7 +278,6 @@ async def generate_response_stream(
 
             ## Detailed Answer:"""
 
-        # Setup LLM with streaming callback
         callback_handler = StreamingCallbackHandler()
         llm = ChatOpenAI(
             model="gpt-3.5-turbo",
@@ -293,15 +285,13 @@ async def generate_response_stream(
             streaming=True,
             callbacks=[callback_handler]
         )
-        
-        # Format the prompt
+
         formatted_prompt = prompt_template.format(
             chat_history=history_text,
             context=context,
             question=question
         )
-        
-        # Start LLM generation in a separate thread
+
         def run_llm():
             try:
                 response = llm.invoke(formatted_prompt)
@@ -310,22 +300,18 @@ async def generate_response_stream(
                 callback_handler.token_queue.put(f"Error: {str(e)}")
                 callback_handler.done = True
                 return str(e)
-        
-        # Start the LLM generation
+
         llm_thread = threading.Thread(target=run_llm)
         llm_thread.start()
-        
-        # First, send the sources
+
         yield f"data: {json.dumps({'sources': sources})}\n\n"
-        
-        # Stream tokens as they come
+
         full_response = ""
         while True:
             try:
-                # Get token from queue with timeout
                 token = callback_handler.token_queue.get(timeout=1)
                 
-                if token is None:  # Sentinel value indicating completion
+                if token is None: 
                     break
                     
                 full_response += token
@@ -336,24 +322,19 @@ async def generate_response_stream(
                     break
                 continue
         
-        # Wait for thread to complete
         llm_thread.join(timeout=30)
-        
-        # Update memory with the conversation
+
         memory.chat_memory.add_user_message(question)
         memory.chat_memory.add_ai_message(full_response)
-        
-        # Save conversation to database
+
         try:
-            # Save user message
             supabase.table("chat_messages").insert({
                 "session_id": session_id,
                 "role": "user",
                 "message": question,
                 "sources": None
             }).execute()
-            
-            # Save AI message with sources
+
             supabase.table("chat_messages").insert({
                 "session_id": session_id,
                 "role": "ai-agent",
@@ -370,8 +351,6 @@ async def generate_response_stream(
     
     yield "data: [DONE]\n\n"
 
-
-# Alternative approach using the newer LangChain LCEL (LangChain Expression Language)
 async def generate_response_stream_lcel(
     question: str, 
     session_id: str, 
@@ -382,8 +361,7 @@ async def generate_response_stream_lcel(
     try:
         from langchain.schema.runnable import RunnablePassthrough
         from langchain.schema.output_parser import StrOutputParser
-        
-        # Get PDF URL from database
+
         pdf_response = supabase.table("pdf_files").select("public_url").eq("id", pdf_id).eq("user_id", current_user["id"]).execute()
         
         if not pdf_response.data:
@@ -398,8 +376,7 @@ async def generate_response_stream_lcel(
             yield f"data: {json.dumps({'content': 'Unable to process PDF content.'})}\n\n"
             yield "data: [DONE]\n\n"
             return
-        
-        # Setup streaming callback
+
         callback_handler = StreamingCallbackHandler()
         llm = ChatOpenAI(
             model="gpt-3.5-turbo",
@@ -407,11 +384,9 @@ async def generate_response_stream_lcel(
             streaming=True,
             callbacks=[callback_handler]
         )
-        
-        # Get memory
+
         memory = get_or_create_memory(session_id)
         
-        # Create RAG chain using LCEL
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
         
         prompt = PromptTemplate.from_template("""
@@ -429,14 +404,13 @@ Answer:""")
         def get_chat_history():
             messages = memory.chat_memory.messages
             history = ""
-            for msg in messages[-6:]:  # Last 3 exchanges
+            for msg in messages[-6:]: 
                 if isinstance(msg, HumanMessage):
                     history += f"Human: {msg.content}\n"
                 elif isinstance(msg, AIMessage):
                     history += f"Assistant: {msg.content}\n"
             return history
         
-        # Build the chain
         rag_chain = (
             {
                 "context": retriever | format_docs,
@@ -447,14 +421,12 @@ Answer:""")
             | llm
             | StrOutputParser()
         )
-        
-        # Stream the response
+
         full_response = ""
         async for chunk in rag_chain.astream(question):
             full_response += chunk
             yield f"data: {json.dumps({'content': chunk})}\n\n"
         
-        # Update memory
         memory.chat_memory.add_user_message(question)
         memory.chat_memory.add_ai_message(full_response)
         

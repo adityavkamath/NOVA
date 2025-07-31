@@ -1,10 +1,14 @@
+import asyncio
+
+async def get_llm_answer(question: str, context: str, source: str = "csv") -> str:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, generate_answer, question, context, source)
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize OpenAI client
 try:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     print("✅ OpenAI client initialized")
@@ -66,7 +70,6 @@ def is_python_question(question: str) -> bool:
         return result
     except Exception as e:
         print(f"❌ Error in LLM classification: {e}")
-        # Default to allowing the question if LLM fails
         return True
 
 def generate_answer(question: str, context: str, source: str) -> str:

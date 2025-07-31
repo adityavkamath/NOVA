@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchChatSessions, fetchFirstMessage, fetchMultiSourceChatSessions, fetchMultiSourceFirstMessage } from "@/actions/chatSessions";
+import { fetchChatSessions, fetchFirstMessage, fetchMultiSourceChatSessions, fetchMultiSourceFirstMessage, fetchAgentChatSessions, fetchAgentFirstMessage } from "@/actions/chatSessions";
 import { truncateText } from "@/lib/utils";
 import { useUser } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
@@ -9,7 +9,7 @@ export interface ChatSession {
   id: string;
   user_id: string;
   title: string;
-  feature_type: 'pdf' | 'csv' | 'web' | 'multi_source';
+  feature_type: 'pdf' | 'csv' | 'web' | 'multi_source' | 'agent_chat';
   source_id?: string;
   created_at: string;
   updated_at?: string;
@@ -33,10 +33,11 @@ export function useChatSessions() {
         throw new Error('User ID not available');
       }
 
-      // Fetch both PDF and multi-source chat sessions in parallel
-      const [pdfData, multiSourceData] = await Promise.all([
+      // Fetch PDF, multi-source, and agent chat sessions in parallel
+      const [pdfData, multiSourceData, agentData] = await Promise.all([
         fetchChatSessions(userId),
-        fetchMultiSourceChatSessions(userId)
+        fetchMultiSourceChatSessions(userId),
+        fetchAgentChatSessions(userId)
       ]);
       
       const allSessions: ChatSession[] = [];
@@ -89,6 +90,33 @@ export function useChatSessions() {
           })
         );
         allSessions.push(...multiSourceSessionsWithFirstMessage);
+      }
+
+      // Process agent chat sessions
+      if (agentData.success && agentData.data && agentData.data.length > 0) {
+        const agentSessionsWithFirstMessage = await Promise.all(
+          agentData.data.map(async (session: any) => {
+            try {
+              const firstMsgData = await fetchAgentFirstMessage(session.id, userId);
+              const firstUserMessage = firstMsgData.success && firstMsgData.data?.find((msg: any) => msg.role === 'user');
+              
+              return {
+                ...session,
+                feature_type: 'agent_chat' as const,
+                source_id: 'agent', // Set a default source_id for agent chats
+                firstMessage: firstUserMessage ? truncateText(firstUserMessage.message) : session.title
+              };
+            } catch {
+              return {
+                ...session,
+                feature_type: 'agent_chat' as const,
+                source_id: 'agent',
+                firstMessage: session.title
+              };
+            }
+          })
+        );
+        allSessions.push(...agentSessionsWithFirstMessage);
       }
       
       // Remove duplicates based on session ID

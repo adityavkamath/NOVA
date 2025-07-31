@@ -30,14 +30,18 @@ export default function CsvViewer({
         if (!response.ok) {
           throw new Error("Failed to fetch CSV data");
         }
-        
+
         const text = await response.text();
-        const rows = text.split('\n').map(row => 
-          row.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''))
-        );
-        
+        const rows = text
+          .split("\n")
+          .map((row) =>
+            row.split(",").map((cell) => cell.trim().replace(/^"|"$/g, ""))
+          );
+
         // Filter out empty rows
-        const filteredRows = rows.filter(row => row.some(cell => cell.length > 0));
+        const filteredRows = rows.filter((row) =>
+          row.some((cell) => cell.length > 0)
+        );
         setCsvData(filteredRows);
         setError(null);
       } catch (err) {
@@ -55,7 +59,7 @@ export default function CsvViewer({
   }, [csvUrl]);
 
   const downloadCsv = () => {
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = csvUrl;
     link.download = fileName;
     document.body.appendChild(link);
@@ -68,7 +72,7 @@ export default function CsvViewer({
     setShowPreview(!showPreview);
   };
 
-  const displayRows = csvData.slice(0, 50); // Show first 50 rows
+  const displayRows = csvData.slice(0, 50); 
   const hasMoreRows = csvData.length > 50;
 
   return (
@@ -82,9 +86,7 @@ export default function CsvViewer({
             <FileSpreadsheet className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-medium text-white">
-              {fileName}
-            </h1>
+            <h1 className="text-sm font-medium text-white">{fileName}</h1>
             {csvData.length > 0 && (
               <p className="text-xs text-gray-400">
                 {csvData.length} rows × {csvData[0]?.length || 0} columns
@@ -99,7 +101,11 @@ export default function CsvViewer({
             size="sm"
             className="text-gray-400 hover:text-white"
           >
-            {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPreview ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
           </Button>
           <Button
             onClick={downloadCsv}
@@ -128,7 +134,11 @@ export default function CsvViewer({
             <div className="text-center space-y-2">
               <FileSpreadsheet className="h-12 w-12 text-gray-600 mx-auto" />
               <p className="text-gray-400">{error}</p>
-              <Button onClick={() => window.location.reload()} variant="outline" size="sm">
+              <Button
+                onClick={() => window.location.reload()}
+                variant="outline"
+                size="sm"
+              >
                 Retry
               </Button>
             </div>
@@ -164,7 +174,7 @@ export default function CsvViewer({
                             className="px-3 py-2 text-gray-300 border-r border-gray-700 last:border-r-0 max-w-[200px] truncate"
                             title={cell}
                           >
-                            {cell || '-'}
+                            {cell || "-"}
                           </td>
                         ))}
                       </tr>
@@ -172,7 +182,7 @@ export default function CsvViewer({
                   </tbody>
                 </table>
               </div>
-              
+
               {hasMoreRows && (
                 <div className="px-4 py-2 bg-gray-800 border-t border-gray-700 text-center">
                   <p className="text-xs text-gray-400">
@@ -191,11 +201,16 @@ export default function CsvViewer({
                 <FileSpreadsheet className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-white mb-2">CSV Preview Hidden</h3>
+                <h3 className="text-lg font-medium text-white mb-2">
+                  CSV Preview Hidden
+                </h3>
                 <p className="text-gray-400 mb-4">
                   Click the eye icon to show the data preview
                 </p>
-                <Button onClick={togglePreview} className="bg-gradient-to-r from-green-500 to-emerald-600">
+                <Button
+                  onClick={togglePreview}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600"
+                >
                   <Eye className="h-4 w-4 mr-2" />
                   Show Preview
                 </Button>
