@@ -102,9 +102,44 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+
 ### 4. Set Up Environment Variables
-- Create a `.env` file in `backend/` for backend secrets (e.g., Clerk, database URLs)
-- (Optional) Set up environment variables for Next.js frontend if needed
+- Create a `.env` file in `backend/` for backend secrets and API keys.
+- (Optional) Set up environment variables for Next.js frontend if needed.
+
+Example `.env` file:
+
+```env
+# SUPABASE
+SUPABASE_DB_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_PROJECT_URL=
+SUPABASE_STORAGE_BUCKET_NAME=
+
+# CLERK
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+CLERK_JWKS_URL=
+CLERK_ISSUER=
+
+# OPENAI
+OPENAI_API_KEY=
+
+# BACKEND API URL
+NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# REDDIT
+REDDIT_CLIENT_ID=
+REDDIT_CLIENT_SECRET=
+REDDIT_USER_AGENT=
+
+# STACKOVERFLOW
+STACK_APP_KEY=
+
+# GITHUB
+GITHUB_TOKEN=
+```
 
 ### 5. Run the Backend Server
 ```bash
