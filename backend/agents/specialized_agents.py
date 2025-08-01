@@ -44,22 +44,10 @@ class BaseRAGAgent(ConversableAgent):
     
     def _execute_function(self, function_name: str, **kwargs) -> str:
         """Execute agent-specific functions"""
-        if self.agent_type == "data_analyst":
-            return self._execute_data_function(function_name, **kwargs)
-        elif self.agent_type == "document_expert":
+        if self.agent_type == "document_expert":
             return self._execute_document_function(function_name, **kwargs)
-        elif self.agent_type == "web_research":
-            return self._execute_web_function(function_name, **kwargs)
         else:
             return f"Function {function_name} not implemented for {self.agent_type}"
-    
-    def _execute_data_function(self, function_name: str, **kwargs) -> str:
-        """Execute data analysis functions"""
-        if function_name == "analyze_csv_data":
-            return self._analyze_csv_data(**kwargs)
-        elif function_name == "calculate_statistics":
-            return self._calculate_statistics(**kwargs)
-        return f"Unknown data function: {function_name}"
     
     def _execute_document_function(self, function_name: str, **kwargs) -> str:
         """Execute document analysis functions"""
@@ -68,51 +56,6 @@ class BaseRAGAgent(ConversableAgent):
         elif function_name == "extract_key_information":
             return self._extract_key_information(**kwargs)
         return f"Unknown document function: {function_name}"
-    
-    def _execute_web_function(self, function_name: str, **kwargs) -> str:
-        """Execute web analysis functions"""
-        if function_name == "analyze_web_content":
-            return self._analyze_web_content(**kwargs)
-        return f"Unknown web function: {function_name}"
-    
-    def _analyze_csv_data(self, data_context: str, analysis_type: str, specific_columns: Optional[List[str]] = None) -> str:
-        """Analyze CSV data with specified type"""
-        # This would integrate with your existing CSV analysis logic
-        analysis_result = {
-            "analysis_type": analysis_type,
-            "data_overview": "CSV data successfully analyzed",
-            "key_findings": [],
-            "statistical_summary": {},
-            "recommendations": []
-        }
-        
-        if analysis_type == "descriptive":
-            analysis_result["key_findings"] = [
-                "Data contains numerical and categorical variables",
-                "No missing values detected in key columns",
-                "Distribution appears normal for most numerical columns"
-            ]
-        elif analysis_type == "statistical":
-            analysis_result["statistical_summary"] = {
-                "total_rows": "Calculated from data",
-                "numerical_columns": "Identified numerical columns",
-                "categorical_columns": "Identified categorical columns"
-            }
-        
-        return json.dumps(analysis_result, indent=2)
-    
-    def _calculate_statistics(self, data_context: str, metrics: List[str]) -> str:
-        """Calculate specific statistical measures"""
-        stats_result = {}
-        for metric in metrics:
-            if metric == "mean":
-                stats_result[metric] = "Calculated mean values"
-            elif metric == "median":
-                stats_result[metric] = "Calculated median values"
-            elif metric == "std":
-                stats_result[metric] = "Calculated standard deviation"
-        
-        return json.dumps(stats_result, indent=2)
     
     def _analyze_document_structure(self, document_content: str, focus_areas: Optional[List[str]] = None) -> str:
         """Analyze document structure"""
@@ -138,20 +81,6 @@ class BaseRAGAgent(ConversableAgent):
         }
         
         return json.dumps(extraction_result, indent=2)
-    
-    def _analyze_web_content(self, web_content: str, analysis_focus: str, query: Optional[str] = None) -> str:
-        """Analyze web content"""
-        web_analysis = {
-            "content_type": "Article/Blog/News",
-            "analysis_focus": analysis_focus,
-            "main_points": ["Key point 1", "Key point 2", "Key point 3"],
-            "source_credibility": "High/Medium/Low",
-            "publication_date": "Extracted if available",
-            "relevant_to_query": query or "General analysis",
-            "additional_sources": ["Source 1", "Source 2"]
-        }
-        
-        return json.dumps(web_analysis, indent=2)
 
 
 class CoordinatorAgent(BaseRAGAgent):
@@ -168,20 +97,10 @@ class CoordinatorAgent(BaseRAGAgent):
     
     def determine_workflow(self, query: str, data_sources: Dict[str, Any]) -> str:
         """Determine the appropriate workflow based on query and available data"""
-        has_csv = bool(data_sources.get("csv_id"))
         has_pdf = bool(data_sources.get("pdf_id")) 
-        has_web = bool(data_sources.get("web_id"))
         
-        source_count = sum([has_csv, has_pdf, has_web])
-        
-        if source_count > 1:
-            return "multi_source_query"
-        elif has_csv:
-            return "csv_analysis"
-        elif has_pdf:
+        if has_pdf:
             return "document_query"
-        elif has_web:
-            return "web_content_query"
         else:
             return "general_query"
     
@@ -189,14 +108,8 @@ class CoordinatorAgent(BaseRAGAgent):
         """Coordinate response generation using appropriate agents"""
         workflow = self.determine_workflow(query, data_sources)
         
-        if workflow == "csv_analysis" and "data_analyst" in self.available_agents:
-            return await self._single_agent_workflow(query, "data_analyst", data_sources)
-        elif workflow == "document_query" and "document_expert" in self.available_agents:
+        if workflow == "document_query" and "document_expert" in self.available_agents:
             return await self._single_agent_workflow(query, "document_expert", data_sources)
-        elif workflow == "web_content_query" and "web_research" in self.available_agents:
-            return await self._single_agent_workflow(query, "web_research", data_sources)
-        elif workflow == "multi_source_query":
-            return await self._multi_agent_workflow(query, data_sources)
         else:
             return self._direct_response(query)
     
@@ -216,66 +129,9 @@ class CoordinatorAgent(BaseRAGAgent):
         response = await self._simulate_agent_conversation(agent, context_message)
         return response
     
-    async def _multi_agent_workflow(self, query: str, data_sources: Dict[str, Any]) -> str:
-        """Handle multi-agent workflow for complex queries"""
-        responses = {}
-        
-        # Determine which agents to involve
-        if data_sources.get("csv_id") and "data_analyst" in self.available_agents:
-            responses["data_analysis"] = await self._simulate_agent_conversation(
-                self.available_agents["data_analyst"], 
-                f"Analyze data for query: {query}"
-            )
-        
-        if data_sources.get("pdf_id") and "document_expert" in self.available_agents:
-            responses["document_analysis"] = await self._simulate_agent_conversation(
-                self.available_agents["document_expert"],
-                f"Analyze document for query: {query}"
-            )
-        
-        if data_sources.get("web_id") and "web_research" in self.available_agents:
-            responses["web_analysis"] = await self._simulate_agent_conversation(
-                self.available_agents["web_research"],
-                f"Analyze web content for query: {query}"
-            )
-        
-        # Synthesize responses
-        synthesis = self._synthesize_responses(query, responses)
-        return synthesis
-    
-    async def _simulate_agent_conversation(self, agent: BaseRAGAgent, message: str) -> str:
-        """Simulate conversation with an agent"""
-        # This is a simplified simulation - in a full implementation,
-        # you would use AutoGen's conversation mechanisms
-        try:
-            response = f"Agent {agent.name} response to: {message}"
-            return response
-        except Exception as e:
-            return f"Error in agent conversation: {str(e)}"
-    
-    def _synthesize_responses(self, query: str, responses: Dict[str, str]) -> str:
-        """Synthesize multiple agent responses into a coherent answer"""
-        synthesis = f"## Comprehensive Analysis for: {query}\n\n"
-        
-        for source_type, response in responses.items():
-            synthesis += f"### {source_type.replace('_', ' ').title()}\n"
-            synthesis += f"{response}\n\n"
-        
-        synthesis += "### Summary\n"
-        synthesis += "Based on the analysis from multiple sources, the key insights are integrated to provide a comprehensive understanding of your query."
-        
-        return synthesis
-    
     def _direct_response(self, query: str) -> str:
         """Provide direct response when no specialists are needed"""
-        return f"I understand your query: '{query}'. However, I don't have access to specific data sources to provide a detailed analysis. Please provide relevant documents, CSV files, or web content for a more comprehensive response."
-
-
-class DataAnalystAgent(BaseRAGAgent):
-    """Specialized agent for CSV data analysis"""
-    
-    def __init__(self, csv_data: Optional[str] = None, **kwargs):
-        super().__init__("data_analyst", csv_data, **kwargs)
+        return f"I understand your query: '{query}'. However, I don't have access to specific PDF documents to provide a detailed analysis. Please provide relevant PDF documents for a more comprehensive response."
 
 
 class DocumentExpertAgent(BaseRAGAgent):
@@ -283,10 +139,3 @@ class DocumentExpertAgent(BaseRAGAgent):
     
     def __init__(self, document_content: Optional[str] = None, **kwargs):
         super().__init__("document_expert", document_content, **kwargs)
-
-
-class WebResearchAgent(BaseRAGAgent):
-    """Specialized agent for web content analysis"""
-    
-    def __init__(self, web_content: Optional[str] = None, **kwargs):
-        super().__init__("web_research", web_content, **kwargs)

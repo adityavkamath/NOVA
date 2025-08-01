@@ -3,7 +3,7 @@
 import type React from "react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { GripVertical } from "lucide-react";
-import WebViewer from "@/components/WebViewer";
+import WebViewer from "@/components/WebViewer"; 
 import ChatSection from "@/components/ChatSection";
 import { useParams, useSearchParams } from "next/navigation";
 import axios from "axios";

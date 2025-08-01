@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  Users, Plus, MessageSquare, Brain, Bot, Trash2
+  Users, Plus, MessageSquare, Brain, Bot, Trash2, FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -98,17 +98,13 @@ export default function AgentDashboard() {
 
   const getDataSourceBadges = (dataSources: Record<string, any>) => {
     const badges = [];
-    if (dataSources.csv_id) badges.push(<Badge key="csv" variant="outline">CSV</Badge>);
     if (dataSources.pdf_id) badges.push(<Badge key="pdf" variant="outline">PDF</Badge>);
-    if (dataSources.web_id) badges.push(<Badge key="web" variant="outline">Web</Badge>);
     return badges;
   };
 
   const getAgentTypeIcon = (agentType: string) => {
     switch (agentType) {
-      case "multi_agent":
-        return <Users className="w-4 h-4" />;
-      case "single_agent":
+      case "document_agent":
         return <Bot className="w-4 h-4" />;
       case "coordinator":
         return <Brain className="w-4 h-4" />;
@@ -133,9 +129,9 @@ export default function AgentDashboard() {
               >
                 ← Back to Sessions
               </Button>
-              <h1 className="text-xl font-semibold text-white">
+              {/* <h1 className="text-xl font-semibold text-white">
                 {selectedSession ? selectedSession.title : "New Agent Chat"}
-              </h1>
+              </h1> */}
             </div>
           </div>
         </div>
@@ -143,10 +139,8 @@ export default function AgentDashboard() {
         <div className="flex-1">
           <AgentChatSection
             sessionId={selectedSession?.id}
-            agentType={(selectedSession?.agent_type as "multi_agent" | "single_agent" | "coordinator") || "multi_agent"}
-            csvId={selectedSession?.data_sources?.csv_id}
+            agentType={(selectedSession?.agent_type as "document_agent" | "coordinator") || "document_agent"}
             pdfId={selectedSession?.data_sources?.pdf_id}
-            webId={selectedSession?.data_sources?.web_id}
           />
         </div>
       </div>
@@ -160,55 +154,32 @@ export default function AgentDashboard() {
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-lg">AutoGen Agents</h1>
+              <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-lg">PDF Document Agent</h1>
               <p className="text-gray-400">
-                Chat with specialized AI agents for comprehensive analysis
+                Chat with specialized AI agent for comprehensive PDF document analysis
               </p>
             </div>
-            <Button
-              onClick={() => setShowNewChat(true)}
-              className="bg-gradient-to-r from-purple-700 to-blue-700 hover:from-purple-800 hover:to-blue-800 text-white shadow-lg"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Agent Chat
-            </Button>
           </div>
         </div>
 
         {/* Agent Status */}
-        <div className="mb-8 p-4 bg-gray-900/80 rounded-lg border border-gray-800 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className={`w-3 h-3 rounded-full ${
-                agentStatus?.status === "active" ? "bg-green-500" : "bg-yellow-500"
-              }`} />
-              <div>
-                <h3 className="font-medium text-white">Agent System Status</h3>
-                <p className="text-sm text-gray-400">
-                  {agentStatus?.status === "active"
-                    ? `${agentStatus.available_agents?.length || 0} agents ready`
-                    : "Initializing..."}
-                </p>
-              </div>
-            </div>
+        <div className="mb-6">
+          <h3 className="font-medium text-white">Document Analysis Agent Status</h3>
+          <p className="text-sm text-gray-400">
+            {agentStatus?.status === "active"
+              ? "Ready to analyze PDF documents"
+              : "Initializing..."}
+          </p>
 
-            {agentStatus?.capabilities && (
-              <div className="flex items-center space-x-2">
-                {agentStatus.capabilities.csv_analysis && (
-                  <Badge variant="outline" className="bg-blue-900 text-blue-200 border-none">CSV Analysis</Badge>
-                )}
-                {agentStatus.capabilities.document_analysis && (
-                  <Badge variant="outline" className="bg-purple-900 text-purple-200 border-none">Document Analysis</Badge>
-                )}
-                {agentStatus.capabilities.web_research && (
-                  <Badge variant="outline" className="bg-green-900 text-green-200 border-none">Web Research</Badge>
-                )}
-                {agentStatus.capabilities.multi_source_synthesis && (
-                  <Badge variant="outline" className="bg-pink-900 text-pink-200 border-none">Multi-Source</Badge>
-                )}
-              </div>
-            )}
-          </div>
+          {agentStatus?.capabilities && (
+            <div className="flex items-center space-x-2 mt-2">
+              {agentStatus.capabilities.document_analysis && (
+                <Badge variant="outline" className="bg-purple-900 text-purple-200 border-none">
+                  Document Analysis
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Sessions Grid */}
@@ -230,21 +201,20 @@ export default function AgentDashboard() {
         ) : sessions.length === 0 ? (
           <div className="text-center py-12">
             <div className="mb-4 p-4 bg-gradient-to-r from-purple-700 to-blue-700 rounded-full w-20 h-20 flex items-center justify-center mx-auto shadow-lg">
-              <Users className="w-10 h-10 text-white" />
+              <FileText className="w-10 h-10 text-white" />
             </div>
             <h3 className="text-xl font-medium text-white mb-2">
-              No Agent Chats Yet
+              No Document Chats Yet
             </h3>
             <p className="text-gray-400 mb-6 max-w-md mx-auto">
-              Start your first conversation with our specialized AI agents. They can analyze data,
-              research documents, and provide comprehensive insights.
+              Start your first conversation with the PDF document analysis agent. Upload documents and get comprehensive insights.
             </p>
             <Button
               onClick={() => setShowNewChat(true)}
               className="bg-gradient-to-r from-purple-700 to-blue-700 hover:from-purple-800 hover:to-blue-800 text-white shadow-lg"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Start Agent Chat
+              Start Document Chat
             </Button>
           </div>
         ) : (

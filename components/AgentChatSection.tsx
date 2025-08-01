@@ -1,13 +1,23 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { Send, User, Bot, Loader2, Copy, Check, ExternalLink, Users, Zap, Brain } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { UserButton, useUser } from "@clerk/nextjs";
+import React, { useState, useEffect, useRef } from "react";
+import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Users, 
+  Bot, 
+  Copy, 
+  Send, 
+  FileText, 
+  Square,
+  Upload,
+  MessageSquare 
+} from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 
 interface SourceInfo {
   title: string;
@@ -47,106 +57,59 @@ interface AgentSession {
 }
 
 interface AgentChatSectionProps {
-  csvId?: string;
   pdfId?: string;
-  webId?: string;
   sessionId?: string;
-  agentType?: "single_agent" | "multi_agent" | "coordinator";
+  agentType?: "document_agent" | "coordinator";
 }
 
 export default function AgentChatSection({
-  csvId,
-  pdfId, 
-  webId,
+  pdfId,
   sessionId,
-  agentType = "multi_agent"
+  agentType = "document_agent"
 }: AgentChatSectionProps) {
   const { user } = useUser();
-  console.log("[AgentChatSection] Rendered with props:", JSON.stringify({ csvId, pdfId, webId, sessionId, agentType }, null, 2));
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [agentStatus, setAgentStatus] = useState<any>(null);
   const [currentSession, setCurrentSession] = useState<AgentSession | null>(null);
-  const [csvIdState, setCsvIdState] = useState<string | undefined>(csvId);
   const [pdfIdState, setPdfIdState] = useState<string | undefined>(pdfId);
-  const [webIdState, setWebIdState] = useState<string | undefined>(webId);
-  const [webUrl, setWebUrl] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch agent status on component mount
   useEffect(() => {
-    console.log("[AgentChatSection] useEffect: fetchAgentStatus");
     fetchAgentStatus();
   }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    console.log("[AgentChatSection] useEffect: messages changed", JSON.stringify(messages, null, 2));
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // Load all messages for a session when sessionId changes and is valid
   useEffect(() => {
     if (!sessionId || sessionId === "" || sessionId === "null" || sessionId === "undefined") {
-      console.log("[AgentChatSection] DEBUG: ChatSection - Invalid sessionId:", sessionId, "csvId:", csvId, "pdfId:", pdfId);
       return;
     }
     if (!user?.id) {
-      console.log("[AgentChatSection] DEBUG: ChatSection - Invalid userId, skipping message load:", user?.id);
       return;
     }
-    console.log("[AgentChatSection] DEBUG: Loading messages for sessionId:", sessionId, "userId:", user?.id);
     loadSession(sessionId);
   }, [sessionId, user?.id]);
 
-  // Only fetch PDF details if pdfId is valid UUID
-  useEffect(() => {
-    const isValidUuid = (id: string | undefined) => {
-      if (!id || id === "null" || id === "undefined" || id === "") return false;
-      // UUID v4 regex
-      return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(id);
-    };
-    if (isValidUuid(pdfIdState)) {
-      // fetchPdfDetails(pdfIdState);
-    } else {
-      // If not valid, set pdfIdState to undefined to prevent invalid API calls
-      if (pdfIdState && (pdfIdState === "null" || pdfIdState === "undefined" || pdfIdState === "")) {
-        setPdfIdState(undefined);
-      }
-      console.log("[AgentChatSection] Skipping PDF fetch, invalid pdfId:", pdfIdState);
-    }
-  }, [pdfIdState]);
-
   // Keep state in sync with props if they change
-  useEffect(() => { setCsvIdState(csvId); }, [csvId]);
-  useEffect(() => {
-    console.log("[AgentChatSection] csvId changed:", csvId);
-    setCsvIdState(csvId);
-  }, [csvId]);
   useEffect(() => { setPdfIdState(pdfId); }, [pdfId]);
-  useEffect(() => {
-    console.log("[AgentChatSection] pdfId changed:", pdfId);
-    setPdfIdState(pdfId);
-  }, [pdfId]);
-  useEffect(() => { setWebIdState(webId); }, [webId]);
-  useEffect(() => {
-    console.log("[AgentChatSection] webId changed:", webId);
-    setWebIdState(webId);
-  }, [webId]);
 
   const fetchAgentStatus = async () => {
     try {
-      console.log("[AgentChatSection] fetchAgentStatus: user", user?.id);
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/agents/agent-status`, {
         headers: {
           "user-id": user?.id || "",
         },
       });
       const status = await response.json();
-      console.log("[AgentChatSection] Agent status fetched:", status);
       setAgentStatus(status);
     } catch (error) {
       console.error("Failed to fetch agent status:", error);
@@ -167,26 +130,19 @@ export default function AgentChatSection({
   // Load all messages for a session
   const loadSession = async (sessionId: string) => {
     if (!isValidUuid(sessionId)) {
-      console.log("[AgentChatSection] Skipping loadSession, invalid sessionId:", sessionId);
       setMessages([]);
       return;
     }
     try {
-      console.log("[AgentChatSection] loadSession: sessionId", sessionId);
-      // Only fetch messages for valid sessionId
       const messagesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/agents/sessions/${sessionId}/messages`, {
         headers: {
           "user-id": user?.id || "",
         },
       });
       if (!messagesResponse.ok) {
-        console.error("[AgentChatSection] Failed to fetch messages, status:", messagesResponse.status);
-        toast.error("Failed to load chat messages");
-        setMessages([]);
-        return;
+        throw new Error(`Failed to fetch messages: ${messagesResponse.status}`);
       }
       const sessionMessages = await messagesResponse.json();
-      console.log("[AgentChatSection] Session messages fetched:", JSON.stringify(sessionMessages, null, 2));
       const formattedMessages: AgentMessage[] = sessionMessages.map((msg: any) => ({
         id: msg.id,
         type: msg.role === "user" ? "user" : "ai_agent",
@@ -194,24 +150,17 @@ export default function AgentChatSection({
         timestamp: new Date(msg.created_at),
         sources: msg.sources ? JSON.parse(msg.sources) : undefined
       }));
-      // Sort messages by timestamp ascending
       const sortedMessages = sortMessagesByTimestamp(formattedMessages);
-      console.log("[AgentChatSection] Sorted messages:", JSON.stringify(sortedMessages, null, 2));
       setMessages(sortedMessages);
     } catch (error) {
       console.error("Failed to load session:", error);
-      toast.error("Failed to load chat session");
-      setMessages([]);
     }
   };
 
   const createSession = async (): Promise<string | null> => {
     try {
-    console.log("[AgentChatSection] createSession called");
       const dataSources: Record<string, any> = {};
-      if (csvId) dataSources.csv_id = csvId;
       if (pdfId) dataSources.pdf_id = pdfId;
-      if (webId) dataSources.web_id = webId;
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/agents/create-agent-session`, {
         method: "POST",
@@ -220,22 +169,20 @@ export default function AgentChatSection({
           "user-id": user?.id || "",
         },
         body: JSON.stringify({
-          title: `Agent Chat - ${new Date().toLocaleString()}`,
-          description: "AutoGen powered chat session",
+          title: `PDF Analysis - ${new Date().toLocaleString()}`,
+          description: "PDF document analysis session",
           agent_type: agentType,
           data_sources: dataSources
         }),
       });
 
       if (!response.ok) {
-        console.error("[AgentChatSection] createSession: response not ok", response.status);
-        throw new Error("Failed to create session");
+        throw new Error(`Failed to create session: ${response.status}`);
       }
 
-      const session = await response.json();
-      console.log("[AgentChatSection] Session created:", session);
-      setCurrentSession(session);
-      return session.id;
+      const sessionData = await response.json();
+      setCurrentSession(sessionData);
+      return sessionData.id;
     } catch (error) {
       console.error("Failed to create session:", error);
       toast.error("Failed to create chat session");
@@ -244,7 +191,6 @@ export default function AgentChatSection({
   };
 
   const sendMessage = async () => {
-    console.log("[AgentChatSection] sendMessage called", { inputValue, isLoading });
     if (!inputValue.trim() || isLoading) return;
 
     const userMessage: AgentMessage = {
@@ -253,7 +199,6 @@ export default function AgentChatSection({
       content: inputValue,
       timestamp: new Date(),
     };
-    console.log("[AgentChatSection] User message:", JSON.stringify(userMessage, null, 2));
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
@@ -269,7 +214,6 @@ export default function AgentChatSection({
       }
       sessionIdToUse = newSessionId;
     }
-    console.log("[AgentChatSection] Using sessionId:", sessionIdToUse);
 
     // Create AI message placeholder
     const aiMessage: AgentMessage = {
@@ -277,23 +221,15 @@ export default function AgentChatSection({
       type: "ai_agent",
       content: "",
       timestamp: new Date(),
-      isStreaming: true,
-      thinking: "Initializing agents..."
+      isStreaming: true
     };
-    console.log("[AgentChatSection] AI message placeholder:", JSON.stringify(aiMessage, null, 2));
 
     setMessages((prev) => [...prev, aiMessage]);
 
     try {
-      abortControllerRef.current = new AbortController();
-      console.log("[AgentChatSection] Sending fetch to /api/agents/chat", JSON.stringify({
-        query: inputValue,
-        session_id: sessionIdToUse,
-        csv_id: csvIdState,
-        pdf_id: pdfIdState,
-        web_id: webIdState,
-        stream: true,
-      }, null, 2));
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/agents/chat`, {
         method: "POST",
         headers: {
@@ -303,119 +239,98 @@ export default function AgentChatSection({
         body: JSON.stringify({
           query: inputValue,
           session_id: sessionIdToUse,
-          csv_id: csvIdState,
           pdf_id: pdfIdState,
-          web_id: webIdState,
           stream: true,
         }),
-        signal: abortControllerRef.current.signal,
+        signal: abortController.signal,
       });
 
       if (!response.ok) {
-        console.error("[AgentChatSection] Response not ok:", response.status);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        console.error("[AgentChatSection] No response body");
-        throw new Error("No response body");
+        throw new Error("No response reader available");
       }
 
-      let fullContent = "";
-      let sources: SourceInfo[] = [];
+      let accumulatedContent = "";
+      // Removed currentSources and currentThinking variables as they're not needed
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = new TextDecoder().decode(value);
-        console.log("[AgentChatSection] Received chunk:", chunk);
-        const lines = chunk.split("\n");
+        const lines = chunk.split('\n').filter(line => line.trim());
 
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            console.log("[AgentChatSection] Streaming line data:", data);
-            if (data === "[DONE]") {
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === aiMessage.id
-                    ? { ...msg, isStreaming: false, thinking: undefined }
-                    : msg
-                )
-              );
-              console.log("[AgentChatSection] Stream done.");
-              continue;
-            }
-
+          if (line.startsWith('data: ')) {
             try {
-              const parsed: StreamChunk = JSON.parse(data);
-              console.log("[AgentChatSection] Parsed stream chunk:", JSON.stringify(parsed, null, 2));
-              if (parsed.sources) {
-                sources = parsed.sources;
-                console.log("[AgentChatSection] Updating sources:", JSON.stringify(sources, null, 2));
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessage.id ? { ...msg, sources } : msg
-                  )
-                );
+              const data: StreamChunk = JSON.parse(line.slice(6));
+              
+              if (data.error) {
+                throw new Error(data.error);
               }
 
-              if (parsed.thinking) {
-                console.log("[AgentChatSection] Agent thinking:", parsed.thinking);
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessage.id ? { ...msg, thinking: parsed.thinking } : msg
-                  )
-                );
+              if (data.content) {
+                accumulatedContent += data.content;
               }
 
-              if (parsed.content) {
-                fullContent += parsed.content;
-                console.log("[AgentChatSection] Streaming content:", fullContent);
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMessage.id
-                      ? { ...msg, content: fullContent }
-                      : msg
-                  )
-                );
-              }
+              // Ignore sources and thinking data per user request
+              // if (data.sources) {
+              //   currentSources = data.sources;
+              // }
 
-              if (parsed.error) {
-                console.error("[AgentChatSection] Stream error:", parsed.error);
-                throw new Error(parsed.error);
-              }
+              // if (data.thinking) {
+              //   currentThinking = data.thinking;
+              // }
+
+              // Update the AI message - only content, no thinking or sources
+              setMessages((prev) => prev.map((msg) => 
+                msg.id === aiMessage.id 
+                  ? {
+                      ...msg,
+                      content: accumulatedContent,
+                      isStreaming: true
+                    }
+                  : msg
+              ));
             } catch (parseError) {
-              console.error("[AgentChatSection] Error parsing chunk:", parseError, data);
+              console.error('Failed to parse chunk:', parseError);
             }
           }
         }
       }
+
+      // Mark as complete
+      setMessages((prev) => prev.map((msg) => 
+        msg.id === aiMessage.id 
+          ? { ...msg, isStreaming: false, thinking: undefined }
+          : msg
+      ));
+
     } catch (error: any) {
-      if (error.name === "AbortError") {
-        console.log("[AgentChatSection] Request was aborted");
+      if (error.name === 'AbortError') {
+        toast.info("Request cancelled");
       } else {
-        console.error("[AgentChatSection] Error sending message:", error);
-        toast.error("Failed to send message. Please try again.");
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === aiMessage.id
-              ? {
-                  ...msg,
-                  content: "Sorry, I encountered an error. Please try again.",
-                  isStreaming: false,
-                  thinking: undefined
-                }
-              : msg
-          )
-        );
+        console.error('Chat error:', error);
+        toast.error("Failed to send message");
+        
+        setMessages((prev) => prev.map((msg) => 
+          msg.id === aiMessage.id 
+            ? { 
+                ...msg, 
+                content: "Sorry, I encountered an error processing your request. Please try again.",
+                isStreaming: false,
+                thinking: undefined
+              }
+            : msg
+        ));
       }
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
-      console.log("[AgentChatSection] sendMessage finished");
     }
   };
 
@@ -424,22 +339,7 @@ export default function AgentChatSection({
       await navigator.clipboard.writeText(text);
       toast.success("Copied to clipboard!");
     } catch (error) {
-      toast.error("Failed to copy to clipboard");
-    }
-  };
-
-  const getAgentIcon = (type?: string) => {
-    switch (type) {
-      case "data_analyst":
-        return <Badge variant="secondary"><Brain className="w-3 h-3 mr-1" /> Data Analyst</Badge>;
-      case "document_expert":
-        return <Badge variant="secondary"><Bot className="w-3 h-3 mr-1" /> Document Expert</Badge>;
-      case "web_research":
-        return <Badge variant="secondary"><ExternalLink className="w-3 h-3 mr-1" /> Web Researcher</Badge>;
-      case "coordinator":
-        return <Badge variant="secondary"><Users className="w-3 h-3 mr-1" /> Coordinator</Badge>;
-      default:
-        return <Badge variant="secondary"><Zap className="w-3 h-3 mr-1" /> AI Agent</Badge>;
+      toast.error("Failed to copy");
     }
   };
 
@@ -458,53 +358,6 @@ export default function AgentChatSection({
     }
   };
 
-  // CSV Upload Handler
-// CSV Upload Handler fix inside your AgentChatSection component
-
-const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  setUploading(true);
-
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-    const res = await fetch(`${backendUrl}/api/csv/upload-csv`, {
-      method: "POST",
-      headers: {
-        "user-id": user?.id || "",
-        // DO NOT set Content-Type header for FormData!
-      },
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const errorMessage = await res.text();
-      throw new Error(errorMessage || "CSV upload failed");
-    }
-
-    const data = await res.json();
-
-    // Extract csv ID from multiple possible response paths
-    const newCsvId = data.data?.id || data.csv_id || data.id || null;
-
-    if (!newCsvId) throw new Error("Failed to get CSV ID from upload response");
-
-    setCsvIdState(newCsvId);
-    toast.success("CSV uploaded successfully!");
-  } catch (err) {
-    console.error("CSV upload error:", err);
-    toast.error(`CSV upload failed: ${(err as Error).message}`);
-  } finally {
-    setUploading(false);
-  }
-};
-
-
-
   // PDF Upload Handler
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -521,31 +374,10 @@ const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!res.ok) throw new Error("PDF upload failed");
       const data = await res.json();
       setPdfIdState(data.data?.id || data.pdf_id || data.id || data.uuid);
-      toast.success("PDF uploaded!");
+      toast.success("PDF uploaded successfully!");
     } catch (err) {
-      toast.error("PDF upload failed");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // Web URL Handler
-  const handleWebUrlSubmit = async () => {
-    if (!webUrl.trim()) return;
-    setUploading(true);
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/web/scrape`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "user-id": user?.id || "" },
-        body: JSON.stringify({ url: webUrl }),
-      });
-      if (!res.ok) throw new Error("Web scrape failed");
-      const data = await res.json();
-      setWebIdState(data.web_id || data.id || data.uuid);
-      toast.success("Web content added!");
-      setWebUrl("");
-    } catch (err) {
-      toast.error("Web scrape failed");
+      console.error("PDF upload error:", err);
+      toast.error(`PDF upload failed: ${(err as Error).message}`);
     } finally {
       setUploading(false);
     }
@@ -557,14 +389,14 @@ const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-gray-900/80">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-gradient-to-r from-purple-700 to-blue-700 rounded-lg shadow-lg">
-            <Users className="w-5 h-5 text-white" />
+            <FileText className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white drop-shadow">AutoGen Agents</h2>
-            <p className="text-sm text-gray-400">
+            <h2 className="text-lg font-semibold text-white drop-shadow">PDF Document Agent</h2>
+            <p className="text-xs text-gray-400">
               {agentStatus?.status === "active" 
-                ? `${agentStatus.available_agents?.length || 0} agents ready`
-                : "Initializing agents..."
+                ? "Document analysis agent ready"
+                : "Initializing agent..."
               }
             </p>
           </div>
@@ -578,216 +410,141 @@ const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       </div>
 
       {/* Data Sources Info */}
-      {(csvIdState || pdfIdState || webIdState) && (
+      {pdfIdState && (
         <div className="p-3 bg-gradient-to-r from-blue-900 to-purple-900 border-b border-gray-800">
           <div className="flex items-center space-x-2 text-sm text-blue-200">
-            <Bot className="w-4 h-4" />
-            <span>Data Sources:</span>
-            {csvIdState && <Badge variant="outline" className="bg-blue-900 text-blue-200 border-none">CSV Data</Badge>}
-            {pdfIdState && <Badge variant="outline" className="bg-purple-900 text-purple-200 border-none">PDF Document</Badge>}
-            {webIdState && <Badge variant="outline" className="bg-green-900 text-green-200 border-none">Web Content</Badge>}
+            <FileText className="w-4 h-4" />
+            <span>Document Ready:</span>
+            <Badge variant="outline" className="bg-purple-900 text-purple-200 border-none">PDF Document</Badge>
           </div>
         </div>
       )}
 
-      {/* Data Source Uploads */}
+      {/* PDF Upload */}
       <div className="border-b border-gray-800 p-4 bg-gray-900/80">
-        <div className="flex flex-col md:flex-row md:items-center md:space-x-6 space-y-2 md:space-y-0 mb-4">
-          {/* CSV Upload */}
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">CSV Data</label>
-            <label className="inline-block px-3 py-1 bg-blue-700 text-white rounded cursor-pointer hover:bg-blue-800 transition shadow-lg">
-              Upload CSV
-              <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={uploading} className="hidden" />
-            </label>
-            {csvIdState && <Badge variant="outline" className="ml-2 bg-green-700 text-white border-none">CSV Ready</Badge>}
-          </div>
-          {/* PDF Upload */}
+        <div className="flex items-center space-x-4 mb-3">
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">PDF Document</label>
-            <label className="inline-block px-3 py-1 bg-purple-700 text-white rounded cursor-pointer hover:bg-purple-800 transition shadow-lg">
+            <label className="inline-flex items-center px-3 py-2 bg-purple-700 text-white rounded cursor-pointer hover:bg-purple-800 transition shadow-lg">
+              <Upload className="w-4 h-4 mr-2" />
               Upload PDF
               <input type="file" accept=".pdf" onChange={handlePdfUpload} disabled={uploading} className="hidden" />
             </label>
             {pdfIdState && <Badge variant="outline" className="ml-2 bg-green-700 text-white border-none">PDF Ready</Badge>}
           </div>
-          {/* Web URL */}
-          <div className="flex items-center space-x-2">
-            <label className="block text-xs font-medium text-gray-400 mb-1">Web URL</label>
-            <Input
-              value={webUrl}
-              onChange={e => setWebUrl(e.target.value)}
-              placeholder="https://example.com"
-              className="w-48 bg-gray-800 text-white border-gray-600"
-              disabled={uploading}
-            />
-            <Button size="sm" onClick={handleWebUrlSubmit} disabled={uploading || !webUrl.trim()} className="bg-blue-700 hover:bg-blue-800 shadow-lg">
-              Add
-            </Button>
-            {webIdState && <Badge variant="outline" className="ml-2 bg-green-700 text-white border-none">Web Ready</Badge>}
-          </div>
+        </div>
+        <div className="text-sm text-gray-400">
+          <p>
+            <strong>📄 Document Analysis:</strong> Upload PDF documents for comprehensive analysis, Q&A, and insights.
+            {pdfIdState && " Your document is ready for analysis."}
+          </p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-800">
-        {messages.length === 0 && (
-          <div className="text-center py-12">
-            <div className="mb-4 p-3 bg-gradient-to-r from-purple-700 to-blue-700 rounded-full w-16 h-16 flex items-center justify-center mx-auto shadow-lg">
-              <Users className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-lg font-medium text-white mb-2">
-              Welcome to AutoGen Agents!
-            </h3>
-            <p className="text-gray-400 text-sm max-w-md mx-auto">
-              Ask questions and our specialized AI agents will collaborate to provide comprehensive answers.
-              {(csvIdState || pdfIdState || webIdState) && " Your data sources are ready for analysis."}
-            </p>
-          </div>
-        )}
-
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex items-start space-x-3 ${
-              message.type === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
-            {message.type === "ai_agent" && (
-              <div className="p-2 bg-gradient-to-r from-purple-700 to-blue-700 rounded-lg shrink-0 shadow-lg">
-                <Bot className="w-5 h-5 text-white" />
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="mb-4 p-4 bg-gradient-to-r from-purple-700 to-blue-700 rounded-full w-16 h-16 flex items-center justify-center mx-auto shadow-lg">
+                <FileText className="w-8 h-8 text-white" />
               </div>
-            )}
-
-            <div
-              className={`max-w-[80%] rounded-xl p-4 shadow-lg ${
-                message.type === "user"
-                  ? "bg-blue-700 text-white ml-auto"
-                  : "bg-gray-900 text-gray-100 border border-gray-800"
-              }`}
-            >
-              {message.type === "ai_agent" && message.agentType && (
-                <div className="mb-2">
-                  {getAgentIcon(message.agentType)}
-                </div>
+              <h3 className="text-lg font-medium text-white mb-2">
+                PDF Document Analysis
+              </h3>
+              <p className="text-gray-400 mb-4 max-w-md mx-auto">
+                Upload a PDF document and ask questions about its content. I can analyze, summarize, and extract key information from your documents.
+              </p>
+              {!pdfIdState && (
+                <p className="text-sm text-purple-400">
+                  Start by uploading a PDF document above.
+                </p>
               )}
-
-              {message.thinking && (
-                <div className="mb-2 p-2 bg-blue-900 rounded text-sm text-blue-200 flex items-center">
-                  <Loader2 className="w-3 h-3 mr-2 animate-spin" />
-                  {message.thinking}
-                </div>
-              )}
-
-              {message.isStreaming && !message.content && !message.thinking && (
-                <div className="flex items-center space-x-2">
-                  <Skeleton className="h-4 w-4 rounded-full bg-gray-800" />
-                  <Skeleton className="h-4 w-20 bg-gray-800" />
-                  <Skeleton className="h-4 w-16 bg-gray-800" />
-                </div>
-              )}
-
-              {message.content && (
-                <div className="whitespace-pre-wrap">
-                  {message.content}
-                </div>
-              )}
-
-              {message.sources && message.sources.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-800">
-                  <p className="text-xs font-medium text-gray-400 mb-2">Sources:</p>
-                  <div className="space-y-2">
-                    {message.sources.map((source, index) => (
-                      <div
-                        key={index}
-                        className="bg-gray-900 p-2 rounded border border-gray-800 text-xs text-gray-200 shadow"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-blue-200">
-                            {source.title}
-                          </span>
-                          <span className="text-blue-400">
-                            {(source.relevance_score * 100).toFixed(0)}%
-                          </span>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-3xl ${
+                  message.type === "user" 
+                    ? "bg-gradient-to-r from-blue-700 to-purple-700 text-white ml-12" 
+                    : "bg-gray-800 border border-gray-700 mr-12"
+                } rounded-lg p-4 shadow-lg`}>
+                  {message.type === "ai_agent" && (
+                    <div className="flex items-center space-x-2 mb-2">
+                      <FileText className="w-4 h-4 text-purple-400" />
+                      <span className="text-xs font-medium text-purple-400">Document Agent</span>
+                      {message.isStreaming && (
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
                         </div>
-                        <p className="text-gray-400 mt-1">
-                          {source.content_preview}
-                        </p>
-                        {source.url && (
-                          <a
-                            href={source.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:underline flex items-center mt-1"
-                          >
-                            <ExternalLink className="w-3 h-3 mr-1" />
-                            View Source
-                          </a>
-                        )}
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="text-white whitespace-pre-wrap">
+                    {message.content || (message.isStreaming ? (
+                      <div className="flex items-center space-x-2">
+                        <Skeleton className="h-4 w-32 bg-gray-700" />
                       </div>
-                    ))}
+                    ) : "")}
                   </div>
-                </div>
-              )}
 
-              {message.type === "ai_agent" && message.content && (
-                <div className="flex items-center mt-2 space-x-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyToClipboard(message.content)}
-                    className="h-6 px-2 text-xs text-blue-400 hover:text-blue-600"
-                  >
-                    <Copy className="w-3 h-3" />
-                  </Button>
+                  
+                  {message.type === "ai_agent" && message.content && !message.isStreaming && (
+                    <div className="flex justify-end mt-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(message.content)}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {message.type === "user" && (
-              <div className="p-2 bg-gray-800 rounded-lg shrink-0 shadow">
-                <User className="w-5 h-5 text-blue-300" />
               </div>
-            )}
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
 
       {/* Input */}
-      <div className="border-t border-gray-800 p-4 bg-gray-900/80">
+      <div className="p-4 border-t border-gray-800 bg-gray-900/80">
         <div className="flex space-x-2">
-          <Input
+          <textarea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Ask the AI agents anything..."
-            disabled={isLoading}
-            className="flex-1 bg-gray-800 text-gray-100 border-gray-700 placeholder-gray-500"
+            onKeyDown={handleKeyPress}
+            placeholder={pdfIdState ? "Ask a question about your PDF document..." : "Upload a PDF document first to start analyzing..."}
+            disabled={isLoading || !pdfIdState}
+            className="flex-1 p-3 bg-gray-800 text-white border border-gray-700 rounded-lg resize-none focus:border-purple-500 focus:outline-none placeholder-gray-500 shadow-inner"
+            rows={3}
           />
-          {isLoading ? (
-            <Button onClick={stopGeneration} variant="destructive" size="sm" className="bg-red-700 hover:bg-red-800 text-white shadow-lg">
-              Stop
-            </Button>
-          ) : (
-            <Button
-              onClick={sendMessage}
-              disabled={!inputValue.trim() || isLoading}
-              size="sm"
-              className="bg-gradient-to-r from-purple-700 to-blue-700 hover:from-purple-800 hover:to-blue-800 text-white shadow-lg"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          )}
+          <div className="flex flex-col space-y-2">
+            {isLoading ? (
+              <Button
+                onClick={stopGeneration}
+                variant="outline"
+                className="px-4 py-3 bg-red-700 hover:bg-red-800 border-red-600 text-white shadow-lg"
+              >
+                <Square className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={sendMessage}
+                disabled={!inputValue.trim() || !pdfIdState}
+                className="px-4 py-3 bg-gradient-to-r from-purple-700 to-blue-700 hover:from-purple-800 hover:to-blue-800 text-white shadow-lg disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
-        {agentStatus?.status !== "active" && (
-          <p className="text-xs text-amber-400 mt-2">
-            ⚠️ Agent system is initializing. Responses may be delayed.
-          </p>
-        )}
       </div>
     </div>
   );
 }
-
-
