@@ -490,7 +490,8 @@ export default function AgentChatSection({
                       </div>
                     ) : "")}
                   </div>
-
+                  
+                  {/* Sources section hidden per user request */}
                   
                   {message.type === "ai_agent" && message.content && !message.isStreaming && (
                     <div className="flex justify-end mt-2">
@@ -516,7 +517,7 @@ export default function AgentChatSection({
       <div className="p-4 border-t border-gray-800 bg-gray-900/80">
         <div className="flex space-x-2">
           <textarea
-            value={inputValue}
+            value={inputValue} 
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder={pdfIdState ? "Ask a question about your PDF document..." : "Upload a PDF document first to start analyzing..."}

@@ -1,15 +1,23 @@
-# NOVA
+# NOVA - AI-Powered RAG Assistant
 
-NOVA is a full-stack AI-powered chat and data ingestion platform. It enables users to interact with various data sources (CSV, PDF, web, etc.), manage chat sessions, and orchestrate specialized AI agents for different tasks. The project is built with Next.js (frontend) and Python FastAPI (backend), supporting extensible data ingestion, semantic search, and agent-based workflows.
+NOVA is a production-ready, full-stack AI-powered chat and data ingestion platform. It enables users to interact with various data sources (CSV, PDF, web content, GitHub, Reddit, etc.), manage chat sessions, and orchestrate specialized AI agents for different tasks. The project is built with Next.js (frontend) and Python FastAPI (backend), featuring Pinecone vector storage, Supabase database, and Clerk authentication.
+
+## 🚀 Live Demo
+- **Frontend**: [Deploy on Vercel](https://vercel.com)
+- **Backend**: [Deploy on Render](https://render.com)
+- **Complete Deployment Guide**: See `DEPLOYMENT_GUIDE.md`
 
 ---
 
 ## Table of Contents
-- [NOVA](#nova)
+- [NOVA - AI-Powered RAG Assistant](#nova---ai-powered-rag-assistant)
+  - [🚀 Live Demo](#-live-demo)
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
   - [Architecture](#architecture)
+  - [Tech Stack](#tech-stack)
   - [Folder Structure](#folder-structure)
+  - [Quick Start](#quick-start)
   - [Setup Instructions](#setup-instructions)
     - [Prerequisites](#prerequisites)
     - [1. Clone the Repository](#1-clone-the-repository)
@@ -18,6 +26,7 @@ NOVA is a full-stack AI-powered chat and data ingestion platform. It enables use
     - [4. Set Up Environment Variables](#4-set-up-environment-variables)
     - [5. Run the Backend Server](#5-run-the-backend-server)
     - [6. Run the Frontend](#6-run-the-frontend)
+  - [Production Deployment](#production-deployment)
   - [Frontend Usage](#frontend-usage)
   - [Backend Usage](#backend-usage)
   - [Development Commands](#development-commands)
@@ -209,10 +218,39 @@ npm run dev
 
 ---
 
+## Production Deployment
+
+Ready to deploy NOVA to production? We support **Vercel** (frontend) and **Render** (backend) with complete configuration files included.
+
+### Quick Deploy
+1. **Read the Complete Guide**: See `DEPLOYMENT_GUIDE.md` for detailed steps
+2. **Frontend**: Deploy to Vercel with one click
+3. **Backend**: Deploy to Render with included `render.yaml`
+4. **Environment**: Use `.env.example` as template for all required variables
+
+### What's Included
+- ✅ **Production Configurations**: `vercel.json`, `render.yaml`, `next.config.ts`
+- ✅ **Environment Templates**: `.env.example` with all required variables
+- ✅ **Health Checks**: `/health` endpoint for monitoring
+- ✅ **Security Headers**: XSS protection, content type validation
+- ✅ **CORS Configuration**: Production URL support
+- ✅ **Startup Scripts**: `backend/start.sh` for Render deployment
+
+### Cloud Services Required
+- **Pinecone**: Vector database (free tier available)
+- **Supabase**: PostgreSQL database (free tier available)  
+- **Clerk**: Authentication service (free tier available)
+- **OpenAI**: LLM and embeddings (pay-per-use)
+
+📖 **[Read Complete Deployment Guide →](DEPLOYMENT_GUIDE.md)**
+
+---
+
 ## Acknowledgements
 - [Next.js](https://nextjs.org/)
 - [FastAPI](https://fastapi.tiangolo.com/)
-- [ChromaDB](https://www.trychroma.com/)
+- [Pinecone](https://www.pinecone.io/)
+- [Supabase](https://supabase.com/)
 - [Clerk](https://clerk.com/)
 
 ---

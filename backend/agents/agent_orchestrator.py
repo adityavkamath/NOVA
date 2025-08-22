@@ -1,10 +1,7 @@
-"""
-Agent Orchestrator - Main class for managing AutoGen agents in RAG system
-"""
-
 import asyncio
 import json
 import logging
+import os
 from typing import Dict, List, Any, Optional, AsyncGenerator
 from dataclasses import dataclass
 
@@ -15,11 +12,8 @@ from .specialized_agents import (
 )
 from .agent_config import WORKFLOW_PATTERNS, get_openai_config
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
 @dataclass
 class AgentContext:
     """Context information for agent operations"""
@@ -47,7 +41,6 @@ class AgentOrchestrator:
                 "document_expert": DocumentExpertAgent(),
             }
             
-            # Register specialists with coordinator
             for agent_type, agent in self.specialists.items():
                 self.coordinator.register_specialist(agent_type, agent)
             
@@ -91,11 +84,14 @@ class AgentOrchestrator:
         Determine the appropriate workflow based on data sources
         """
         data_sources = context.data_sources
-        source_types = []
-        if data_sources.get("pdf_id"):
-            source_types.append("pdf")
 
-        if "pdf" in source_types:
+        has_documents = bool(
+            data_sources.get("pdf_id") or 
+            data_sources.get("csv_id") or 
+            data_sources.get("web_id")
+        )
+
+        if has_documents:
             return "document_query"
         else:
             return "general_query"
@@ -129,64 +125,93 @@ class AgentOrchestrator:
             response_parts.append(chunk)
         return "".join(response_parts)
 
-    # --- Streaming handlers ---
 
     async def _handle_document_query_stream(
         self, context: AgentContext
     ) -> AsyncGenerator[str, None]:
         yield json.dumps({"content": "📄 Initializing document analysis agent...\n\n"})
-        await asyncio.sleep(0.1)
-        yield json.dumps({"content": "**Document Analysis**\n\n"})
-
-        pdf_id = context.data_sources.get("pdf_id")
-        doc_context = []
-        if pdf_id:
-            doc_context = await self._get_document_context(
-                pdf_id, context.user_id, context.query
-            )
-
+        await asyncio.sleep(0.3)
+        
         analysis_steps = [
-            "Scanning document structure...",
-            "Extracting relevant sections...",
-            "Analyzing content for query relevance...",
-            "Formulating comprehensive response...",
+            "🔍 Scanning document for relevant content...",
+            "📖 Reading and understanding the document...", 
+            "🧠 Analyzing content with AI specialist...",
+            "✨ Preparing comprehensive response...",
         ]
-        for step in analysis_steps:
-            yield json.dumps({"content": f"• {step}\n"})
-            await asyncio.sleep(0.2)
+        for i, step in enumerate(analysis_steps):
+            yield json.dumps({"content": f"{step}\n"})
+            await asyncio.sleep(0.4)
 
-                # 3. Run PDF agent analysis
         try:
-            result = await self._analyze_document_with_agent(context.query, doc_context)
-            yield json.dumps({"content": result})
+            if self.coordinator:
+                response = await self.coordinator.coordinate_response(
+                    query=context.query,
+                    data_sources=context.data_sources,
+                    user_id=context.user_id
+                )
+                yield json.dumps({"content": f"\n---\n\n{response}"})
+            else:
+                pdf_id = context.data_sources.get("pdf_id")
+                doc_context = []
+                if pdf_id:
+                    doc_context = await self._get_document_context(
+                        pdf_id, context.user_id, context.query
+                    )
+                
+                result = await self._analyze_document_with_agent(context.query, doc_context)
+                yield json.dumps({"content": f"\n---\n\n{result}"})
+                
         except Exception as e:
             logger.error(f"Document analysis failed: {e}")
-            yield json.dumps({"error": f"Document analysis failed: {str(e)}"})
+            error_response = f"""I apologize, but I encountered an error while analyzing the document: {str(e)}
+
+**Possible solutions:**
+• Make sure your PDF document was uploaded successfully
+• Try rephrasing your question
+• Check if the document contains the information you're looking for
+• Try again in a few moments
+
+If the problem persists, please contact support."""
+            yield json.dumps({"content": error_response})
 
     async def _handle_general_query_stream(
         self, context: AgentContext
     ) -> AsyncGenerator[str, None]:
-        yield json.dumps({"content": "💭 Processing general query...\n\n"})
+        yield json.dumps({"content": "💭 Processing your query...\n\n"})
         await asyncio.sleep(0.1)
         
-        content = f"""I understand you're asking about: '{context.query}'
+        content = f"""I understand you're asking: **"{context.query}"**
 
-To provide the most accurate analysis, please upload a PDF document that relates to your question. I specialize in analyzing PDF documents and can extract relevant information, summarize content, and answer specific questions based on the document content.
+To provide you with the most accurate and detailed analysis, I need you to upload a PDF document first. 
 
-**What I can help you with:**
-• Document analysis and summarization
-• Question answering from PDF content
-• Information extraction from documents
-• Technical document interpretation
+🚀 **Here's what I can do once you upload a document:**
+
+📋 **Comprehensive Document Analysis:**
+• Summarize the main content and key findings
+• Extract specific information based on your questions  
+• Analyze document structure and organization
+• Identify key themes and important concepts
+
+🔍 **Interactive Q&A:**
+• Answer detailed questions about the document content
+• Explain complex terms or technical concepts  
+• Compare information across different sections
+• Provide insights and interpretations
+
+💡 **Smart Insights:**
+• Highlight the most important points
+• Connect related concepts within the document
+• Suggest areas for further exploration
+• Provide context and explanations
+
+**To get started:** Click the "Upload PDF" button above and then ask me anything about your document!
 """
         yield json.dumps({"content": content})
-
-    # ---- Integration with existing semantic search and analysis logic ----
 
     async def _get_document_context(
         self, pdf_id: str, user_id: str, query: str
     ) -> List[str]:
-        from backend.utils.semantic_search import semantic_search
+        from utils.semantic_search import semantic_search
 
         try:
             search_results = await semantic_search(
@@ -204,7 +229,7 @@ To provide the most accurate analysis, please upload a PDF document that relates
             return []
 
     async def _get_web_context(self, web_id: str, user_id: str) -> str:
-        from backend.utils.semantic_search import semantic_search
+        from utils.semantic_search import semantic_search
 
         try:
             search_results = await semantic_search(
@@ -225,8 +250,6 @@ To provide the most accurate analysis, please upload a PDF document that relates
         if data_sources.get("pdf_id"):
             sources.append({"type": "pdf", "id": data_sources["pdf_id"]})
         return sources
-
-    # --- Agent analysis methods using external AI (OpenAI) ---
 
     async def _analyze_document_with_agent(
         self, query: str, doc_context: List[str]
@@ -266,6 +289,4 @@ To provide the most accurate analysis, please upload a PDF document that relates
             print(f"OpenAI error: {e}")
             return "Error generating answer from PDF."
 
-
-# Global instance of the orchestrator
 orchestrator = AgentOrchestrator()

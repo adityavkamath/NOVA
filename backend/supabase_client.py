@@ -1,8 +1,8 @@
 from supabase import create_client, Client
-from backend.config import SUPABASE_PROJECT_URL, SUPABASE_SERVICE_ROLE_KEY
+from config import SUPABASE_PROJECT_URL, SUPABASE_SERVICE_ROLE_KEY
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from backend.models.models import Base
+from models.models import Base
 from typing import Generator
 import os
 

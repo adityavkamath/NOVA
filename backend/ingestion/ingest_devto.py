@@ -4,12 +4,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 import requests
 from dotenv import load_dotenv
-import chromadb
-from chromadb.utils import embedding_functions
+
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.schema import Document
 import re
-from config import CHROMA_DIR
+from vectorstore.pinecone_utils import upsert_to_pinecone
 
 load_dotenv()
 
@@ -32,12 +31,7 @@ TAGS = [
     "parsing", "yaml", "json"
 ]
 
-embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-client = chromadb.PersistentClient(path=CHROMA_DIR)
-embedding_func = embedding_functions.OpenAIEmbeddingFunction(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
-collection = client.get_or_create_collection("devto", embedding_function=embedding_func)
+
 
 
 def fetch_dev_articles(tag, limit=100):
@@ -67,27 +61,24 @@ def main():
     
     total_articles = 0
     
+
     for tag in TAGS:
         print(f"🔍 Fetching DEV.to articles for tag: {tag}")
         articles = fetch_dev_articles(tag)
-        
         if not articles:
             continue
-        
+        texts, metadatas, ids = [], [], []
         for article in articles:
             try:
                 content = f"{article.get('title', '')}\n{article.get('description', '')}".strip()
-                
                 if not content or len(content) < 50:
                     continue
-                
                 cleaned = clean_text(content)
-
                 metadata = {
-                    "title": article.get("title") or "No title", 
+                    "title": article.get("title") or "No title",
                     "url": article.get("url") or "",
                     "source": "devto",
-                    "tags": tag,  
+                    "tags": tag,
                     "published_at": article.get("published_at") or "",
                     "public_reactions_count": article.get("public_reactions_count") or 0,
                     "comments_count": article.get("comments_count") or 0,
@@ -95,20 +86,16 @@ def main():
                     "author": (article.get("user") or {}).get("name") or "",
                     "cover_image": article.get("cover_image") or ""
                 }
-
-                collection.add(
-                    documents=[cleaned],
-                    metadatas=[metadata],
-                    ids=[article.get("url", f"devto_{article.get('id', '')}_{tag}")],
-                )
-                
+                texts.append(cleaned)
+                metadatas.append(metadata)
+                ids.append(article.get("url", f"devto_{article.get('id', '')}_{tag}"))
                 total_articles += 1
-                print(f"✅ Ingested: {article.get('title', 'No title')}")
-                
             except Exception as e:
                 print(f"❌ Failed to ingest: {article.get('title', 'No title')} -> {e}")
                 continue
-        
+        if texts:
+            upsert_to_pinecone(texts, metadatas, ids)
+            print(f"✅ Ingested {len(texts)} articles for tag '{tag}'")
         print(f"✅ Completed tag '{tag}' - Total articles so far: {total_articles}")
 
     print(f"✅ DEV.to Ingestion Complete! Total articles: {total_articles}")

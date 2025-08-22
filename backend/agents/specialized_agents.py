@@ -1,13 +1,10 @@
-"""
-Specialized AutoGen Agents for RAG System
-"""
 import asyncio
 import json
+import os
 from typing import Dict, List, Any, Optional, Callable
 import autogen
 from autogen import ConversableAgent, UserProxyAgent
 from .agent_config import AGENT_CONFIGS, AGENT_FUNCTIONS, get_openai_config
-
 
 class BaseRAGAgent(ConversableAgent):
     """Base class for RAG-specific agents with enhanced capabilities"""
@@ -28,60 +25,6 @@ class BaseRAGAgent(ConversableAgent):
         self.agent_type = agent_type
         self.context_data = context_data
         self.conversation_history = []
-        
-        # Register functions specific to this agent type
-        if agent_type in AGENT_FUNCTIONS:
-            for func_config in AGENT_FUNCTIONS[agent_type]:
-                self.register_function(
-                    function_map={func_config["name"]: self._create_function_handler(func_config)}
-                )
-    
-    def _create_function_handler(self, func_config: Dict) -> Callable:
-        """Create a function handler based on configuration"""
-        def handler(**kwargs):
-            return self._execute_function(func_config["name"], **kwargs)
-        return handler
-    
-    def _execute_function(self, function_name: str, **kwargs) -> str:
-        """Execute agent-specific functions"""
-        if self.agent_type == "document_expert":
-            return self._execute_document_function(function_name, **kwargs)
-        else:
-            return f"Function {function_name} not implemented for {self.agent_type}"
-    
-    def _execute_document_function(self, function_name: str, **kwargs) -> str:
-        """Execute document analysis functions"""
-        if function_name == "analyze_document_structure":
-            return self._analyze_document_structure(**kwargs)
-        elif function_name == "extract_key_information":
-            return self._extract_key_information(**kwargs)
-        return f"Unknown document function: {function_name}"
-    
-    def _analyze_document_structure(self, document_content: str, focus_areas: Optional[List[str]] = None) -> str:
-        """Analyze document structure"""
-        structure_analysis = {
-            "document_type": "Identified from content",
-            "main_sections": ["Introduction", "Main Content", "Conclusion"],
-            "page_count": "Estimated from content length",
-            "key_topics": focus_areas or ["Identified key topics"],
-            "document_quality": "Good readability and structure"
-        }
-        
-        return json.dumps(structure_analysis, indent=2)
-    
-    def _extract_key_information(self, document_content: str, query: str, information_type: str = "facts") -> str:
-        """Extract key information based on query"""
-        extraction_result = {
-            "query": query,
-            "information_type": information_type,
-            "extracted_info": f"Key information relevant to: {query}",
-            "confidence": "High",
-            "page_references": ["Page 1", "Page 3"],
-            "related_topics": ["Related topic 1", "Related topic 2"]
-        }
-        
-        return json.dumps(extraction_result, indent=2)
-
 
 class CoordinatorAgent(BaseRAGAgent):
     """Main coordinator agent that orchestrates other agents"""
@@ -97,15 +40,22 @@ class CoordinatorAgent(BaseRAGAgent):
     
     def determine_workflow(self, query: str, data_sources: Dict[str, Any]) -> str:
         """Determine the appropriate workflow based on query and available data"""
-        has_pdf = bool(data_sources.get("pdf_id")) 
+        has_documents = bool(
+            data_sources.get("pdf_id") or 
+            data_sources.get("csv_id") or 
+            data_sources.get("web_id")
+        )
         
-        if has_pdf:
+        if has_documents:
             return "document_query"
         else:
             return "general_query"
     
-    async def coordinate_response(self, query: str, data_sources: Dict[str, Any]) -> str:
+    async def coordinate_response(self, query: str, data_sources: Dict[str, Any], user_id: str = None) -> str:
         """Coordinate response generation using appropriate agents"""
+        if user_id:
+            self.current_user_id = user_id
+            
         workflow = self.determine_workflow(query, data_sources)
         
         if workflow == "document_query" and "document_expert" in self.available_agents:
@@ -114,24 +64,134 @@ class CoordinatorAgent(BaseRAGAgent):
             return self._direct_response(query)
     
     async def _single_agent_workflow(self, query: str, agent_type: str, data_sources: Dict[str, Any]) -> str:
-        """Handle single agent workflow"""
-        agent = self.available_agents[agent_type]
+        """Handle single agent workflow with real document analysis"""
+        document_content = await self._get_document_content(data_sources, query)
         
-        # Create a context-specific message
-        context_message = f"""
-        Query: {query}
-        Data Sources: {json.dumps(data_sources, indent=2)}
-        
-        Please analyze this query using your specialized capabilities and provide a comprehensive response.
-        """
-        
-        # This would initiate a conversation with the specialist agent
-        response = await self._simulate_agent_conversation(agent, context_message)
-        return response
+        if not document_content:
+            return "I couldn't find any relevant document content to analyze. Please make sure you have uploaded a PDF document and it has been processed successfully."
+
+        try:
+            from openai import AsyncOpenAI
+            import os
+            
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                return "OpenAI API key is not configured. Please check your environment settings."
+            
+            client = AsyncOpenAI(api_key=openai_api_key)
+
+            comprehensive_prompt = f"""You are an expert document analyst. Based on the following document content, provide a comprehensive and conversational response to the user's query.
+
+Document Content:
+{document_content}
+
+User's Question: {query}
+
+Please provide a detailed, human-readable response that:
+1. Directly answers the user's question
+2. Provides relevant context from the document
+3. Highlights key insights and findings
+4. Uses a conversational, professional tone
+5. References specific information from the document when appropriate
+
+Do NOT return JSON or structured data. Provide a natural, flowing response as if you're having a conversation with the user."""
+
+            response = await client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a helpful document analysis expert who provides clear, conversational responses based on document content."},
+                    {"role": "user", "content": comprehensive_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=2000
+            )
+            
+            return response.choices[0].message.content.strip()
+                
+        except Exception as e:
+            return f"I encountered an error while analyzing the document: {str(e)}. Please try again or contact support if the issue persists."
+    
+    async def _get_document_content(self, data_sources: Dict[str, Any], query: str) -> str:
+        """Get document content using semantic search"""
+        try:
+            from utils.semantic_search import semantic_search
+            
+            content_chunks = []
+
+            if data_sources.get("pdf_id"):
+                pdf_results = await semantic_search(
+                    query=query,
+                    user_id=self.current_user_id if hasattr(self, 'current_user_id') else None,
+                    feature_type="pdf",
+                    source_id=data_sources["pdf_id"],
+                    top_k=15  
+                )
+                if pdf_results:
+                    content_chunks.extend([result["chunk_text"] for result in pdf_results])
+
+            if data_sources.get("csv_id"):
+                csv_results = await semantic_search(
+                    query=query,
+                    user_id=self.current_user_id if hasattr(self, 'current_user_id') else None,
+                    feature_type="csv",
+                    source_id=data_sources["csv_id"],
+                    top_k=15
+                )
+                if csv_results:
+                    content_chunks.extend([result["chunk_text"] for result in csv_results])
+
+            if data_sources.get("web_id"):
+                web_results = await semantic_search(
+                    query=query,
+                    user_id=self.current_user_id if hasattr(self, 'current_user_id') else None,
+                    feature_type="web",
+                    source_id=data_sources["web_id"],
+                    top_k=15
+                )
+                if web_results:
+                    content_chunks.extend([result["chunk_text"] for result in web_results])
+            
+            if content_chunks:
+                unique_chunks = []
+                seen_chunks = set()
+                for chunk in content_chunks:
+                    if chunk.strip() and chunk not in seen_chunks:
+                        unique_chunks.append(chunk.strip())
+                        seen_chunks.add(chunk)
+
+                combined_content = "\n\n---\n\n".join(unique_chunks[:20])
+                return combined_content[:32000]  
+            else:
+                return ""
+                
+        except Exception as e:
+            print(f"Error retrieving document content: {e}")
+            return ""
     
     def _direct_response(self, query: str) -> str:
         """Provide direct response when no specialists are needed"""
-        return f"I understand your query: '{query}'. However, I don't have access to specific PDF documents to provide a detailed analysis. Please provide relevant PDF documents for a more comprehensive response."
+        return f"""I understand you're asking: "{query}"
+
+To provide you with a comprehensive analysis, I need you to upload a PDF document first. Here's what I can help you with once you upload a document:
+
+📄 **Document Analysis:**
+- Summarize the main content and key points
+- Extract specific information based on your questions
+- Analyze document structure and organization
+- Answer questions about the document's content
+
+📊 **Content Insights:**
+- Identify key themes and topics
+- Highlight important findings or conclusions
+- Explain complex concepts in simple terms
+- Compare information across different sections
+
+🔍 **Interactive Q&A:**
+- Answer specific questions about the document
+- Clarify technical terms or concepts
+- Provide detailed explanations of specific sections
+
+Please upload a PDF document using the upload button above, and then ask me any questions about it!"""
 
 
 class DocumentExpertAgent(BaseRAGAgent):

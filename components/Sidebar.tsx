@@ -147,7 +147,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       // Use a dedicated route for agent chat sessions (e.g., /dashboard/agents/session/[sessionId])
       router.push(`/dashboard/agents/session/${chat.id}`);
     } else if (chat.feature_type === "multi_source") {
-      router.push(`/dashboard/${featureRoute}?sessionId=${chat.id}`);
+      router.push(`/dashboard/chats/${featureRoute}?sessionId=${chat.id}`);
     } else {
       router.push(`/dashboard/chats/${featureRoute}/${chat.source_id}?sessionId=${chat.id}`);
     }

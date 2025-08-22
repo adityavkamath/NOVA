@@ -2,7 +2,7 @@
 
 import { fetchChatSessions, fetchFirstMessage, fetchMultiSourceChatSessions, fetchMultiSourceFirstMessage, fetchAgentChatSessions, fetchAgentFirstMessage } from "@/actions/chatSessions";
 import { truncateText } from "@/lib/utils";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 
 export interface ChatSession {
@@ -22,6 +22,7 @@ export function useChatSessions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useUser();
+  const { getToken } = useAuth();
 
   const fetchSessions = async () => {
     try {
@@ -33,11 +34,14 @@ export function useChatSessions() {
         throw new Error('User ID not available');
       }
 
+      // Get the auth token
+      const token = await getToken();
+
       // Fetch PDF, multi-source, and agent chat sessions in parallel
       const [pdfData, multiSourceData, agentData] = await Promise.all([
-        fetchChatSessions(userId),
-        fetchMultiSourceChatSessions(userId),
-        fetchAgentChatSessions(userId)
+        fetchChatSessions(userId, undefined, token || undefined),
+        fetchMultiSourceChatSessions(userId, token || undefined),
+        fetchAgentChatSessions(userId, token || undefined)
       ]);
       
       const allSessions: ChatSession[] = [];
@@ -47,7 +51,7 @@ export function useChatSessions() {
         const pdfSessionsWithFirstMessage = await Promise.all(
           pdfData.data.map(async (session: ChatSession) => {
             try {
-              const firstMsgData = await fetchFirstMessage(session.id, userId);
+              const firstMsgData = await fetchFirstMessage(session.id, userId, token || undefined);
               const firstUserMessage = firstMsgData.data?.find((msg: any) => msg.role === 'user');
               
               return {
@@ -70,7 +74,7 @@ export function useChatSessions() {
         const multiSourceSessionsWithFirstMessage = await Promise.all(
           multiSourceData.sessions.map(async (session: any) => {
             try {
-              const firstMsgData = await fetchMultiSourceFirstMessage(session.id, userId);
+              const firstMsgData = await fetchMultiSourceFirstMessage(session.id, userId, token || undefined);
               const firstUserMessage = firstMsgData.messages?.find((msg: any) => msg.role === 'user');
               
               return {
@@ -97,7 +101,7 @@ export function useChatSessions() {
         const agentSessionsWithFirstMessage = await Promise.all(
           agentData.data.map(async (session: any) => {
             try {
-              const firstMsgData = await fetchAgentFirstMessage(session.id, userId);
+              const firstMsgData = await fetchAgentFirstMessage(session.id, userId, token || undefined);
               const firstUserMessage = firstMsgData.success && firstMsgData.data?.find((msg: any) => msg.role === 'user');
               
               return {

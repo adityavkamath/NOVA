@@ -1,6 +1,3 @@
-"""
-Agent Configuration and Behavioral Rules for AutoGen RAG System
-"""
 import os
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -15,8 +12,7 @@ class AgentConfig:
     max_consecutive_auto_reply: int = 3
     human_input_mode: str = "NEVER"
     code_execution_config: Optional[Dict] = None
-    
-# Agent Behavioral Rules and Configurations
+
 AGENT_CONFIGS = {
     "coordinator": AgentConfig(
         name="Coordinator",
@@ -95,7 +91,6 @@ COMMUNICATION STYLE:
     )
 }
 
-# Function definitions for agents
 AGENT_FUNCTIONS = {
     "document_expert": [
         {

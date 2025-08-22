@@ -4,17 +4,15 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 import praw
-import chromadb
-from chromadb.utils import embedding_functions
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.schema import Document
 from config import (
-    CHROMA_DIR,
     REDDIT_CLIENT_ID,
     REDDIT_CLIENT_SECRET,
     REDDIT_USER_AGENT,
     REDDIT_COLLECTION_NAME,
 )
+from vectorstore.pinecone_utils import upsert_to_pinecone
 import re
 from dotenv import load_dotenv
 
@@ -34,19 +32,7 @@ reddit = praw.Reddit(
     user_agent=REDDIT_USER_AGENT,
 )
 
-embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-client = chromadb.PersistentClient(path=CHROMA_DIR)
 
-try:
-    embedding_func = embedding_functions.OpenAIEmbeddingFunction(
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-    collection = client.get_or_create_collection(
-        REDDIT_COLLECTION_NAME, embedding_function=embedding_func
-    )
-except Exception as e:
-    print("Failed to create Reddit collection:", e)
-    sys.exit(1)
 
 TAGS = [
     "python",
@@ -148,32 +134,26 @@ def fetch_posts(tags=TAGS, limit_per_tag=10):
 
 def ingest():
     """Ingest Reddit posts into ChromaDB with LangChain"""
-    print("🚀 Ingesting Reddit posts into ChromaDB with LangChain...")
+
+    print("🚀 Ingesting Reddit posts into Pinecone with LangChain...")
     posts = fetch_posts()
-    
     if not posts:
         print("❌ No posts to ingest")
         return
-
     print(f"📦 Processing {len(posts)} posts...")
-    
+    texts, metadatas, ids = [], [], []
     for i, post in enumerate(posts):
         try:
             doc = post["document"]
-
-            collection.add(
-                documents=[doc.page_content],
-                metadatas=[doc.metadata],
-                ids=[post["id"]],
-            )
-            
-            if (i + 1) % 10 == 0:
-                print(f"✅ Ingested {i+1}/{len(posts)} Reddit posts")
-                
+            texts.append(doc.page_content)
+            metadatas.append(doc.metadata)
+            ids.append(post["id"])
         except Exception as e:
-            print(f"⚠️ Failed to ingest post {post['id']}: {e}")
+            print(f"⚠️ Failed to process post {post['id']}: {e}")
             continue
-
+    if texts:
+        upsert_to_pinecone(texts, metadatas, ids)
+        print(f"✅ Ingested {len(texts)} Reddit posts")
     print(f"✅ Reddit ingestion complete! Processed {len(posts)} posts")
 
 

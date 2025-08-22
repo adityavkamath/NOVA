@@ -5,11 +5,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 import requests
 from dotenv import load_dotenv 
-import chromadb
-from chromadb.utils import embedding_functions 
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.schema import Document
-from config import CHROMA_DIR, STACKOVERFLOW_COLLECTION_NAME, STACK_APP_KEY
+from config import STACKOVERFLOW_COLLECTION_NAME, STACK_APP_KEY
+from vectorstore.pinecone_utils import upsert_to_pinecone
 import re
 
 load_dotenv()
@@ -67,14 +66,7 @@ QUERIES = [
     "json",
 ]
 
-embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-client = chromadb.PersistentClient(path=CHROMA_DIR)
-embedding_func = embedding_functions.OpenAIEmbeddingFunction(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
-collection = client.get_or_create_collection(
-    STACKOVERFLOW_COLLECTION_NAME, embedding_function=embedding_func
-)
+
 
 
 def fetch_so_posts(tag, limit=100):
@@ -113,25 +105,23 @@ def ingest_stackoverflow():
     
     total_posts = 0
     
+
     for tag in QUERIES:
         print(f"🔍 Ingesting StackOverflow posts for tag: {tag}")
         posts = fetch_so_posts(tag)
-        
         if not posts:
             continue
-            
+        texts, metadatas, ids = [], [], []
         for post in posts:
             try:
                 content = f"{post.get('title', '')}\n{post.get('body', '')}".strip()
                 cleaned = clean_text(content)
-                
-                if len(cleaned) < 50:  
+                if len(cleaned) < 50:
                     continue
-
                 metadata = {
                     "url": post.get("link", ""),
                     "score": post.get("score", 0),
-                    "tags": tag,  
+                    "tags": tag,
                     "source": "stackoverflow",
                     "question_id": post.get("question_id", ""),
                     "view_count": post.get("view_count", 0),
@@ -139,19 +129,16 @@ def ingest_stackoverflow():
                     "creation_date": post.get("creation_date", 0),
                     "is_answered": post.get("is_answered", False)
                 }
-
-                collection.add(
-                    documents=[cleaned],
-                    metadatas=[metadata],
-                    ids=[post.get("link", f"so_{post.get('question_id', '')}_{tag}")],
-                )
-                
+                texts.append(cleaned)
+                metadatas.append(metadata)
+                ids.append(post.get("link", f"so_{post.get('question_id', '')}_{tag}"))
                 total_posts += 1
-                
             except Exception as e:
                 print(f"⚠️ Failed to ingest post {post.get('link', 'unknown')}: {e}")
                 continue
-        
+        if texts:
+            upsert_to_pinecone(texts, metadatas, ids)
+            print(f"✅ Ingested {len(texts)} posts for tag '{tag}'")
         print(f"✅ Completed tag '{tag}' - Total posts so far: {total_posts}")
 
     print(f"✅ StackOverflow Ingestion Complete! Total posts: {total_posts}")

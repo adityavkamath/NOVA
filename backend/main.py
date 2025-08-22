@@ -1,9 +1,14 @@
 from fastapi import FastAPI, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
 
-from backend.routes import pdf_routes, chat_routes, multi_chat_routes, csv_routes, web_routes, agent_routes
+# Load environment variables
+load_dotenv()
 
-from backend.auth.clerk_auth import get_current_user
+from routes import pdf_routes, chat_routes, multi_chat_routes, csv_routes, web_routes, agent_routes
+
+from auth.clerk_auth import get_current_user
 
 app = FastAPI(
     title="RAG AI Agent Backend",
@@ -11,14 +16,22 @@ app = FastAPI(
     docs_url="/docs",
 )
 
+# CORS configuration - includes production URLs
 origins = [
     "http://localhost:3000",
+    "http://localhost:3001", 
     "http://localhost:3002",
     "http://localhost:3003",
     "http://127.0.0.1:3000",
-    "http://127.0.0.1:3002",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002", 
     "http://127.0.0.1:3003",
 ]
+
+# Add production frontend URL if available
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    origins.append(frontend_url)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +47,7 @@ async def handle_cors_preflight(request: Request, call_next):
     if request.method == "OPTIONS":
         response = Response()
         origin = request.headers.get("origin")
-        if origin in ["http://localhost:3000", "http://localhost:3002", "http://localhost:3003", "http://127.0.0.1:3000", "http://127.0.0.1:3002", "http://127.0.0.1:3003"]:
+        if origin in ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:3002", "http://127.0.0.1:3003"]:
             response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
@@ -54,6 +67,17 @@ app.include_router(agent_routes.router, prefix="/api/agents", tags=["AutoGen Age
 @app.get("/")
 def read_root():
     return {"message": "Backend is running 🚀"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for monitoring services"""
+    import datetime
+    return {
+        "status": "healthy",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "service": "Nova RAG Backend",
+        "version": "1.0.0"
+    }
 
 @app.get("/api/me")
 async def get_me(current_user: dict = Depends(get_current_user)):

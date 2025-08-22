@@ -22,7 +22,7 @@ import tempfile
 import requests
 import pandas as pd
 from datetime import datetime
-from backend.supabase_client import supabase
+from supabase_client import supabase
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter

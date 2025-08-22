@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, HttpUrl
-from backend.auth.clerk_auth import get_current_user
-from backend.supabase_client import supabase
+from auth.clerk_auth import get_current_user
+from supabase_client import supabase
 import uuid
 import requests
 import re
 from urllib.parse import urljoin, urlparse
-from backend.utils.embedding_processor import process_web_embeddings
+from utils.embedding_processor import process_web_embeddings
 
 try:
     from bs4 import BeautifulSoup

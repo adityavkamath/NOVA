@@ -5,12 +5,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 import requests
 from dotenv import load_dotenv
-import chromadb
-from chromadb.utils import embedding_functions
+
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.schema import Document
 import re
-from config import CHROMA_DIR
+from vectorstore.pinecone_utils import upsert_to_pinecone
 
 load_dotenv()
 
@@ -70,14 +69,7 @@ QUERIES = [
     "json",
 ]
 
-embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-client = chromadb.PersistentClient(path=CHROMA_DIR)
-embedding_func = embedding_functions.OpenAIEmbeddingFunction(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
-collection = client.get_or_create_collection(
-    "hackernews", embedding_function=embedding_func
-)
+
 
 
 def fetch_hn_posts(query, limit=200):
@@ -104,31 +96,27 @@ def main():
 
     total_posts = 0
 
+
     for query in QUERIES:
         print(f"🔍 Fetching Hacker News posts for query: {query}")
         posts = fetch_hn_posts(query)
-
         if not posts:
             continue
-
+        texts, metadatas, ids = [], [], []
         for post in posts:
             try:
                 content = f"{post.get('title', '')}\n{post.get('story_text', '') or ''}".strip()
-
                 if not content or len(content) < 50:
                     continue
-
                 cleaned = clean_text(content)
-
                 url = (
                     post.get("url")
                     or f"https://news.ycombinator.com/item?id={post.get('objectID', '')}"
                 )
-
                 metadata = {
                     "url": url,
                     "source": "hackernews",
-                    "title": post.get("title", ""), 
+                    "title": post.get("title", ""),
                     "tags": query,
                     "points": post.get("points", 0),
                     "num_comments": post.get("num_comments", 0),
@@ -136,20 +124,16 @@ def main():
                     "author": post.get("author", ""),
                     "objectID": post.get("objectID", ""),
                 }
-
-                collection.add(
-                    documents=[cleaned],
-                    metadatas=[metadata],
-                    ids=[f"hn_{post.get('objectID', '')}_{query}"],
-                )
-
+                texts.append(cleaned)
+                metadatas.append(metadata)
+                ids.append(f"hn_{post.get('objectID', '')}_{query}")
                 total_posts += 1
-                print(f"✅ Ingested: {post.get('title', 'No title')}")
-
             except Exception as e:
                 print(f"❌ Failed to ingest: {post.get('title', 'No title')} -> {e}")
                 continue
-
+        if texts:
+            upsert_to_pinecone(texts, metadatas, ids)
+            print(f"✅ Ingested {len(texts)} posts for query '{query}'")
         print(f"✅ Completed query '{query}' - Total posts so far: {total_posts}")
 
     print(f"✅ Hacker News Ingestion Complete! Total posts: {total_posts}")

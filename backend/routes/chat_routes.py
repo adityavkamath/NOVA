@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from backend.auth.clerk_auth import get_current_user
-from backend.supabase_client import supabase
+from auth.clerk_auth import get_current_user
+from supabase_client import supabase
 from typing import Optional
 import uuid
 import json
-from backend.utils.chat_processing import get_or_create_memory, generate_response_stream
+from utils.chat_processing import get_or_create_memory, generate_response_stream
 
 router = APIRouter()
 

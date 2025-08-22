@@ -1,49 +1,6 @@
-import chromadb
-from chromadb.utils import embedding_functions 
+
 import os
-from backend.config import CHROMA_DIR
-
-try:
-    embedding_func = embedding_functions.OpenAIEmbeddingFunction(
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-    client = chromadb.PersistentClient(path=CHROMA_DIR)
-    print(f"✅ ChromaDB client initialized at: {CHROMA_DIR}")
-except Exception as e:
-    print(f"❌ Error initializing ChromaDB: {e}")
-    client = None
-    embedding_func = None
-
-collections = {}
-collection_names = {
-    "reddit": "reddit_python",
-    "stackoverflow": "stackoverflow_python", 
-    "devto": "devto",
-    "github": "github_discussions",
-    "hackernews": "haysckernews",
-}
-
-for key, collection_name in collection_names.items():
-    try:
-        if client and embedding_func:
-            try:
-                collections[key] = client.get_collection(
-                    name=collection_name,
-                    embedding_function=embedding_func
-                )
-                print(f"✅ Successfully loaded existing collection: {collection_name}")
-            except Exception:
-                collections[key] = client.create_collection(
-                    name=collection_name,
-                    embedding_function=embedding_func
-                )
-                print(f"✅ Successfully created new collection: {collection_name}")
-        else:
-            print(f"⚠️ Cannot load collection {collection_name}: Client not initialized")
-            collections[key] = None
-    except Exception as e:
-        print(f"⚠️ Warning: Could not load collection {collection_name}: {e}")
-        collections[key] = None
+from vectorstore.pinecone_utils import query_pinecone
 
 async def semantic_search(query: str, user_id: str, feature_type: str, source_id: str, top_k: int = 5):
     """
@@ -56,7 +13,7 @@ async def semantic_search(query: str, user_id: str, feature_type: str, source_id
             try:
                 from langchain_community.vectorstores import Chroma
                 from langchain_openai import OpenAIEmbeddings
-                from backend.config import CHROMA_DIR
+                from config import CHROMA_DIR
                 import os
                 embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
                 db = Chroma(persist_directory=CHROMA_DIR, embedding_function=embeddings_model)
@@ -86,7 +43,7 @@ async def semantic_search(query: str, user_id: str, feature_type: str, source_id
                 print(f"❌ ChromaDB CSV semantic search error: {chroma_e}")
                 # Fallback to Supabase
                 try:
-                    from backend.supabase_client import supabase
+                    from supabase_client import supabase
                     response = supabase.table("document_chunks").select("*").eq("user_id", user_id).eq("feature_type", feature_type).eq("source_id", source_id).limit(top_k).execute()
                     return response.data if response.data else []
                 except Exception as fallback_error:
@@ -94,7 +51,7 @@ async def semantic_search(query: str, user_id: str, feature_type: str, source_id
                     return []
         else:
             # Default: Supabase RPC for other feature_types
-            from backend.supabase_client import supabase
+            from supabase_client import supabase
             from langchain_openai import OpenAIEmbeddings
             embeddings_model = OpenAIEmbeddings(model="text-embedding-3-small")
             query_embedding = embeddings_model.embed_query(query)
@@ -116,106 +73,34 @@ async def semantic_search(query: str, user_id: str, feature_type: str, source_id
 def search_similar_docs(query: str, source: str = "all", top_k: int = 5):
     """Search for similar documents across collections"""
     try:
-        if not client or not embedding_func:
-            print("❌ ChromaDB client not initialized")
-            return []
-            
-        if source == "all":
-            selected_sources = collections.keys()
-        else:
-            selected_sources = [source] if source in collections else []
-
+        # Pinecone: filter by source metadata if not 'all'
         results = []
-        for src in selected_sources:
-            if src not in collections or collections[src] is None:
-                print(f"⚠️ Collection {src} not available")
-                continue
-                
-            try:
-                collection = collections[src]
-                res = collection.query(query_texts=[query], n_results=top_k)
-
-                if not res or not isinstance(res, dict):
-                    print(f"⚠️ Invalid result structure from {src}")
-                    continue
-                    
-                documents = res.get("documents")
-                metadatas = res.get("metadatas")
-                distances = res.get("distances")
-
-                if documents is None or not isinstance(documents, list):
-                    print(f"⚠️ No valid documents from {src} - documents is {type(documents)}")
-                    continue
-                    
-                if metadatas is None:
-                    metadatas = []
-                elif not isinstance(metadatas, list):
-                    print(f"⚠️ Invalid metadatas type from {src}: {type(metadatas)}")
-                    metadatas = []
-                    
-                if distances is None:
-                    distances = []
-                elif not isinstance(distances, list):
-                    print(f"⚠️ Invalid distances type from {src}: {type(distances)}")
-                    distances = []
-
-                try:
-                    if len(documents) > 0 and isinstance(documents[0], list):
-                        doc_list = documents[0]
-                        meta_list = metadatas[0] if len(metadatas) > 0 and isinstance(metadatas[0], list) else []
-                        dist_list = distances[0] if len(distances) > 0 and isinstance(distances[0], list) else []
-                    else:
-
-                        doc_list = documents
-                        meta_list = metadatas if isinstance(metadatas, list) else []
-                        dist_list = distances if isinstance(distances, list) else []
-
-                    if not isinstance(doc_list, list):
-                        print(f"⚠️ doc_list is not a list from {src}: {type(doc_list)}")
-                        continue
-
-                    for i in range(len(doc_list)):
-                        metadata = {}
-                        if i < len(meta_list) and meta_list[i] and isinstance(meta_list[i], dict):
-                            metadata = meta_list[i]
-
-                        distance = 0.0
-                        if i < len(dist_list) and dist_list[i] is not None:
-                            try:
-                                distance = float(dist_list[i])
-                            except (ValueError, TypeError):
-                                distance = 0.0
-
-                        url = metadata.get("url", "")
-                        if not url or url == "N/A" or not url.startswith(("http://", "https://")):
-                            url = None 
-                        
-                        results.append({
-                            "text": str(doc_list[i]),
-                            "url": url,
-                            "score": distance,
-                            "source": src,
-                            "title": metadata.get("title", "No title"),
-                        })
-                        
-                except Exception as inner_e:
-                    print(f"❌ Error processing documents from {src}: {inner_e}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
-                    
-            except Exception as e:
-                print(f"❌ Error querying collection {src}: {e}")
-                import traceback
-                traceback.print_exc()
-                continue
-
+        if source == "all":
+            pinecone_results = query_pinecone(query, top_k=top_k)
+            for match in pinecone_results.get("matches", []):
+                meta = match.get("metadata", {})
+                results.append({
+                    "text": meta.get("text", ""),
+                    "url": meta.get("url", None),
+                    "score": match.get("score", 0.0),
+                    "source": meta.get("source", "unknown"),
+                    "title": meta.get("title", "No title"),
+                })
+        else:
+            pinecone_results = query_pinecone(query, top_k=top_k)
+            for match in pinecone_results.get("matches", []):
+                meta = match.get("metadata", {})
+                if meta.get("source") == source:
+                    results.append({
+                        "text": meta.get("text", ""),
+                        "url": meta.get("url", None),
+                        "score": match.get("score", 0.0),
+                        "source": meta.get("source", "unknown"),
+                        "title": meta.get("title", "No title"),
+                    })
         return sorted(results, key=lambda d: d["score"])[:top_k]
-        
-    except Exception as outer_e:
-        print(f"❌ Outer error in search_similar_docs: {outer_e}")
-        import traceback
-        traceback.print_exc()
+    except Exception as e:
+        print(f"❌ Error in Pinecone search_similar_docs: {e}")
         return []
 
 def get_all_documents(source: str = "reddit"):

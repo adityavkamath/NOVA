@@ -1,10 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header
-from backend.auth.clerk_auth import get_current_user
-from backend.supabase_client import supabase
-from backend.config import SUPABASE_STORAGE_BUCKET_NAME
+from auth.clerk_auth import get_current_user
+from supabase_client import supabase
+from config import SUPABASE_STORAGE_BUCKET_NAME
 import uuid
 
-from backend.utils.embedding_processor import process_csv_embeddings
+from utils.embedding_processor import process_csv_embeddings
 
 router = APIRouter()
 BUCKET = SUPABASE_STORAGE_BUCKET_NAME

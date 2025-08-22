@@ -1,18 +1,21 @@
 """
 AutoGen Agent Routes for RAG System
 """
+import os
+import re
+import json
+import uuid
+import traceback
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, logger
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
-import json
-import uuid
 import os
 
-from backend.auth.clerk_auth import get_current_user
-from backend.supabase_client import supabase
-from backend.agents.agent_orchestrator import orchestrator, AgentContext
+from auth.clerk_auth import get_current_user
+from supabase_client import supabase
+from agents.agent_orchestrator import orchestrator, AgentContext
 
 router = APIRouter()
 
@@ -62,13 +65,12 @@ async def create_agent_session(
         
         session_id = str(uuid.uuid4())
 
-        # 👇 DO NOT pass source_id — it's UUID and not required here
         session_data = {
             "id": session_id,
             "user_id": current_user["id"],
             "title": request.title,
-            "feature_type": "agent",   # NEW feature_type for agents
-            "agent_type": request.agent_type  # ✅ Added new column
+            "feature_type": "agent",  
+            "agent_type": request.agent_type  
         }
 
         # DEBUG: log what we’re inserting

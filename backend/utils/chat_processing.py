@@ -1,4 +1,4 @@
-from backend.supabase_client import supabase
+from supabase_client import supabase
 from typing import AsyncGenerator
 import json
 import asyncio
@@ -92,7 +92,7 @@ async def generate_response_stream(
                 return
         
         elif csv_id:
-            from backend.utils.semantic_search import semantic_search
+            from utils.semantic_search import semantic_search
             search_results = await semantic_search(
                 query=question,
                 user_id=current_user["id"],
@@ -123,7 +123,7 @@ async def generate_response_stream(
                 context_text = "\n".join([result["chunk_text"] for result in search_results if isinstance(result, dict) and "chunk_text" in result])
         
         elif web_id:
-            from backend.utils.semantic_search import semantic_search
+            from utils.semantic_search import semantic_search
             
             search_results = await semantic_search(
                 query=question,

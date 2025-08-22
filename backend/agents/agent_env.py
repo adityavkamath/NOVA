@@ -1,10 +1,6 @@
-"""
-AutoGen Agent Configuration and Environment Setup
-"""
 import os
 from pathlib import Path
 
-# Agent Configuration
 AGENT_CONFIG = {
     "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
     "OPENAI_MODEL_PRIMARY": os.getenv("OPENAI_MODEL_PRIMARY", "gpt-4"),
@@ -28,7 +24,6 @@ AGENT_CONFIG = {
     "MAX_CONCURRENT_AGENTS": int(os.getenv("MAX_CONCURRENT_AGENTS", "5")),
 }
 
-# Validation
 def validate_agent_config():
     """Validate agent configuration"""
     required_vars = ["OPENAI_API_KEY"]
@@ -43,5 +38,4 @@ def validate_agent_config():
     
     return True
 
-# Export configuration
 __all__ = ["AGENT_CONFIG", "validate_agent_config"]
