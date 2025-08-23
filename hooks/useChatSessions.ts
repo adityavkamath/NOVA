@@ -1,9 +1,13 @@
 "use client";
 
 import { fetchChatSessions, fetchFirstMessage, fetchMultiSourceChatSessions, fetchMultiSourceFirstMessage, fetchAgentChatSessions, fetchAgentFirstMessage } from "@/actions/chatSessions";
-import { truncateText } from "@/lib/utils";
 import { useUser, useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
+
+// Inlined utility function to avoid import issues on Vercel
+function truncateText(text: string, maxLength: number = 80): string {
+  return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
+}
 
 export interface ChatSession {
   id: string;

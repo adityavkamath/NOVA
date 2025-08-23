@@ -22,8 +22,20 @@ import { SignedIn, UserButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChatSession, useChatSessions } from "@/hooks/useChatSessions";
-import { formatTimeAgo } from "../lib/utils";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
+
+function formatTimeAgo(timestamp: string): string {
+  const now = new Date();
+  const messageTime = new Date(timestamp);
+  const diffInSeconds = Math.floor((now.getTime() - messageTime.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} months ago`;
+  return `${Math.floor(diffInSeconds / 31536000)} years ago`;
+}
 
 interface SidebarProps {
   isCollapsed: boolean;
