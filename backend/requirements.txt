@@ -1,28 +1,29 @@
 # Core FastAPI and web framework
-fastapi==0.116.1
-uvicorn==0.32.1
-python-multipart==0.0.20
+fastapi
+uvicorn
+python-multipart
 
 # Database and storage
-supabase==2.11.0
-sqlalchemy==2.0.36
-psycopg2-binary==2.9.10
+supabase
+sqlalchemy
+psycopg2-binary
 
 # Authentication
-python-jose[cryptography]==3.3.0
-python-dotenv==1.0.1
+python-jose[cryptography]
+python-dotenv
 
 # AI and ML libraries
-openai==1.58.1
+openai
 pinecone
 langchain
 langchain-openai
+langchain-community
 
 # Document processing
-pypdf2==3.0.1
-python-docx==1.1.3
-beautifulsoup4==4.13.4
-requests==2.32.3
+pypdf
+python-docx
+beautifulsoup4
+requests
 
 # Data processing
 pandas
@@ -30,8 +31,8 @@ numpy
 pydantic
 
 # Data ingestion
-praw==7.8.1
-feedparser==6.0.11
+praw
+feedparser
 
 # Utilities
 python-dateutil
