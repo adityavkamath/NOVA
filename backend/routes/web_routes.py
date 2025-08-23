@@ -6,6 +6,9 @@ import uuid
 import requests
 import re
 from urllib.parse import urljoin, urlparse
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.embedding_processor import process_web_embeddings
 
 try:

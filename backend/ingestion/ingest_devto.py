@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.schema import Document
 import re
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from vectorstore.pinecone_utils import upsert_to_pinecone
 
 load_dotenv()

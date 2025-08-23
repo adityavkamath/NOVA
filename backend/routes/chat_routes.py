@@ -6,6 +6,9 @@ from supabase_client import supabase
 from typing import Optional
 import uuid
 import json
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.chat_processing import get_or_create_memory, generate_response_stream
 
 router = APIRouter()

@@ -3,8 +3,6 @@ import json
 import os
 from typing import Dict, List, Any, Optional, Callable
 from openai import OpenAI, AsyncOpenAI
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .agent_config import AGENT_CONFIGS, AGENT_FUNCTIONS, get_openai_config
 
 class BaseRAGAgent:

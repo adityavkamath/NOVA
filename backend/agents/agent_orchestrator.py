@@ -4,7 +4,8 @@ import logging
 import os
 from typing import Dict, List, Any, Optional, AsyncGenerator
 from dataclasses import dataclass
-
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from .specialized_agents import (
     CoordinatorAgent,

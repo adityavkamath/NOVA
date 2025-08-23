@@ -15,6 +15,9 @@ import os
 
 from auth.clerk_auth import get_current_user
 from supabase_client import supabase
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.agent_orchestrator import orchestrator, AgentContext
 
 router = APIRouter()

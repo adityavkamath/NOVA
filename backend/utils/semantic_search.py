@@ -1,6 +1,22 @@
 
 import os
-from vectorstore.pinecone_utils import query_pinecone
+import sys
+import asyncio
+from typing import List, Dict, Any, Optional
+
+# Add the backend directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from vectorstore.pinecone_utils import query_pinecone
+except ImportError:
+    # Fallback import path
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("pinecone_utils", 
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "vectorstore", "pinecone_utils.py"))
+    pinecone_utils = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pinecone_utils)
+    query_pinecone = pinecone_utils.query_pinecone
 
 async def semantic_search(query: str, user_id: str, feature_type: str, source_id: str, top_k: int = 5):
     """

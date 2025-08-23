@@ -1,5 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from auth.clerk_auth import get_current_user
 from utils.semantic_search import search_similar_docs, get_available_sources, check_collections_status
 from utils.llm_answer import generate_answer, is_python_question

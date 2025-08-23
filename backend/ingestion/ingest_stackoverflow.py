@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.schema import Document
 from config import STACKOVERFLOW_COLLECTION_NAME, STACK_APP_KEY
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from vectorstore.pinecone_utils import upsert_to_pinecone
 import re
 

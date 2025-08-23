@@ -12,6 +12,9 @@ from config import (
     REDDIT_USER_AGENT,
     REDDIT_COLLECTION_NAME,
 )
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from vectorstore.pinecone_utils import upsert_to_pinecone
 import re
 from dotenv import load_dotenv

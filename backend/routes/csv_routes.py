@@ -3,6 +3,9 @@ from auth.clerk_auth import get_current_user
 from supabase_client import supabase
 from config import SUPABASE_STORAGE_BUCKET_NAME
 import uuid
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.embedding_processor import process_csv_embeddings
 
