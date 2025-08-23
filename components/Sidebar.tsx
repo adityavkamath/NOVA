@@ -22,7 +22,7 @@ import { SignedIn, UserButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChatSession, useChatSessions } from "@/hooks/useChatSessions";
-import { formatTimeAgo } from "@/lib/utils";
+import { formatTimeAgo } from "../lib/utils";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
 interface SidebarProps {
