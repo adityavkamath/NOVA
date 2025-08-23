@@ -21,7 +21,7 @@ async function getAuthHeadersWithToken(token: string) {
 
 export async function fetchChatSessions(userId: string, featureType?: string, token?: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com/' || 'http://localhost:8000';
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com';
     const url = new URL('/api/chat/', baseUrl);
     
     if (featureType) {
@@ -53,7 +53,8 @@ export async function fetchChatSessions(userId: string, featureType?: string, to
 
 export async function fetchMultiSourceChatSessions(userId: string, token?: string) {
   try {
-    const url = new URL('/api/multi/sessions', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com';
+    const url = new URL('/api/multi/sessions', baseUrl);
 
     const headers = token ? await getAuthHeadersWithToken(token) : {
       'user-id': userId,
@@ -84,7 +85,7 @@ export async function fetchFirstMessage(sessionId: string, userId: string, token
       'Content-Type': 'application/json',
     };
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/${sessionId}/messages?limit=1`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com'}/api/chat/${sessionId}/messages?limit=1`, {
       method: 'GET',
       headers,
     });
@@ -108,7 +109,7 @@ export async function fetchMultiSourceFirstMessage(sessionId: string, userId: st
       'Content-Type': 'application/json',
     };
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/multi/sessions/${sessionId}/messages`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com'}/api/multi/sessions/${sessionId}/messages`, {
       method: 'GET',
       headers,
     });
@@ -127,7 +128,7 @@ export async function fetchMultiSourceFirstMessage(sessionId: string, userId: st
 
 export async function fetchAgentChatSessions(userId: string, token?: string) {
   try {
-    const url = new URL('/api/agents/sessions', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+    const url = new URL('/api/agents/sessions', process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com');
 
     const headers = token ? await getAuthHeadersWithToken(token) : {
       'user-id': userId,
@@ -158,7 +159,7 @@ export async function fetchAgentFirstMessage(sessionId: string, userId: string, 
       'Content-Type': 'application/json',
     };
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/agents/sessions/${sessionId}/messages`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com'}/api/agents/sessions/${sessionId}/messages`, {
       method: 'GET',
       headers,
     });

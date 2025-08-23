@@ -187,6 +187,30 @@ async def agent_chat(
         raise HTTPException(status_code=500, detail=f"Error during agent chat: {str(e)}")
 
 
+@router.get("/sessions")
+async def get_agent_chat_sessions(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all agent chat sessions for the current user"""
+    try:
+        response = supabase.table("chat_sessions").select("*").eq("user_id", current_user["id"]).eq("feature_type", "agent_chat").order("created_at", desc=True).execute()
+        
+        return {
+            "sessions": [
+                {
+                    "id": session["id"],
+                    "title": session["title"],
+                    "created_at": session["created_at"],
+                    "feature_type": session["feature_type"]
+                }
+                for session in response.data
+            ]
+        }
+        
+    except Exception as e:
+        print(f"Error getting agent chat sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/sessions/{session_id}/messages")
 async def get_agent_session_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """
