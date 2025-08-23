@@ -109,95 +109,61 @@ def search_similar_docs(query: str, source: str = "all", top_k: int = 5):
         return []
 
 def get_all_documents(source: str = "reddit"):
-    """Get all documents from a specific source or all sources"""
-    if not client:
-        print("❌ ChromaDB client not initialized")
-        return []
+    """Get all documents from a specific source using Pinecone"""
+    try:
+        # For Pinecone-based search, we can query by source metadata
+        from .pinecone_utils import query_pinecone
         
-    docs = []
-
-    if source == "all":
-        sources = collections.keys()
-    else:
-        sources = [source] if source in collections else []
-
-    for src in sources:
-        collection = collections.get(src)
-        if not collection:
-            print(f"⚠️ Collection {src} not available or not loaded")
-            continue
-
-        try:
-            results = collection.get(include=["documents", "embeddings", "metadatas"]) 
-
-            for i in range(len(results["documents"])):
-                metadata = results["metadatas"][i] if results["metadatas"] else {}
-                docs.append({
-                    "id": results["ids"][i],
-                    "text": results["documents"][i],
-                    "embedding": results["embeddings"][i] if results["embeddings"] else None,
-                    "url": metadata.get("url", "N/A"),
-                    "score": metadata.get("score", 0),
-                    "source": metadata.get("source", src),
-                    "title": metadata.get("title", "No title"),
-                })
-        except Exception as e:
-            print(f"❌ Error getting documents from collection {src}: {e}")
-            continue
-
-    return docs
+        # Query Pinecone for documents with specific source
+        results = query_pinecone("", top_k=100, source_filter=source if source != "all" else None)
+        
+        docs = []
+        for match in results.get("matches", []):
+            meta = match.get("metadata", {})
+            docs.append({
+                "text": meta.get("text", ""),
+                "url": meta.get("url", None),
+                "score": match.get("score", 0.0),
+                "source": meta.get("source", "unknown"),
+                "title": meta.get("title", "No title"),
+            })
+        
+        return docs
+    except Exception as e:
+        print(f"❌ Error getting documents from source {source}: {e}")
+        return []
 
 def get_available_sources():
-    """Get list of available sources"""
-    available = []
-    for key, collection in collections.items():
-        if collection is not None:
-            available.append(key)
-    return available
+    """Get list of available sources from Pinecone"""
+    try:
+        # Return the sources that are configured for multi-source chat
+        available_sources = ["reddit", "stackoverflow", "devto", "hackernews", "github"]
+        return available_sources
+    except Exception as e:
+        print(f"❌ Error getting available sources: {e}")
+        return []
 
 def reset_collections():
-    """Reset and recreate all collections"""
-    global collections, client, embedding_func
-    
-    if not client or not embedding_func:
-        print("❌ Cannot reset collections: Client not initialized")
-        return False
-    
-    print("🔄 Resetting all collections...")
-
-    for key, collection_name in collection_names.items():
-        try:
-            client.delete_collection(name=collection_name)
-            print(f"🗑️ Deleted collection: {collection_name}")
-        except Exception as e:
-            print(f"ℹ️ Collection {collection_name} doesn't exist or couldn't be deleted: {e}")
-
-    collections = {}
-    for key, collection_name in collection_names.items():
-        try:
-            collections[key] = client.create_collection(
-                name=collection_name,
-                embedding_function=embedding_func
-            )
-            print(f"✅ Created new collection: {collection_name}")
-        except Exception as e:
-            print(f"❌ Failed to create collection {collection_name}: {e}")
-            collections[key] = None
-    
+    """Reset and recreate all collections - Not implemented for Pinecone"""
+    print("ℹ️ Collection reset not needed for Pinecone")
     return True
 
 def check_collections_status():
     """Check which collections are available and working"""
-    status = {}
-    for key, collection_name in collection_names.items():
-        try:
-            if key in collections and collections[key] is not None:
-                collection = collections[key]
-                result = collection.count()
-                status[key] = {"status": "available", "count": result, "collection_name": collection_name}
-            else:
-                status[key] = {"status": "not_loaded", "count": 0, "collection_name": collection_name}
-        except Exception as e:
-            status[key] = {"status": "error", "error": str(e), "collection_name": collection_name}
-    
-    return status
+    # For Pinecone, we check index status
+    try:
+        from .pinecone_utils import get_pinecone_index_stats
+        stats = get_pinecone_index_stats()
+        return {
+            "pinecone": {
+                "status": "available" if stats else "error",
+                "stats": stats
+            }
+        }
+    except Exception as e:
+        return {
+            "pinecone": {
+                "status": "error",
+                "error": str(e)
+            }
+        }

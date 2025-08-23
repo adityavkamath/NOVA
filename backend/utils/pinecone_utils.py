@@ -59,3 +59,13 @@ def query_pinecone(query, top_k=5):
     query_vector = embeddings_model.embed_query(query)
     res = index.query(vector=query_vector, top_k=top_k, include_metadata=True)
     return res
+
+def get_pinecone_index_stats():
+    """Get Pinecone index statistics"""
+    try:
+        _, index, _ = get_pinecone_client()
+        stats = index.describe_index_stats()
+        return stats
+    except Exception as e:
+        print(f"❌ Error getting Pinecone stats: {e}")
+        return None
