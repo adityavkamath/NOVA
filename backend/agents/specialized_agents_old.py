@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from typing import Dict, List, Any, Optional, Callable
-from openai import OpenAI, AsyncOpenAI
+from openai import OpenAI
 from .agent_config import AGENT_CONFIGS, AGENT_FUNCTIONS, get_openai_config
 
 class BaseRAGAgent:
@@ -18,7 +18,6 @@ class BaseRAGAgent:
         # Initialize OpenAI client
         openai_config = get_openai_config()
         self.client = OpenAI(api_key=openai_config["config_list"][0]["api_key"])
-        self.async_client = AsyncOpenAI(api_key=openai_config["config_list"][0]["api_key"])
         self.model = openai_config["config_list"][0]["model"]
         
         self.agent_type = agent_type
@@ -41,7 +40,7 @@ class BaseRAGAgent:
             
             messages.append({"role": "user", "content": message})
             
-            response = await self.async_client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.7,
@@ -59,7 +58,6 @@ class BaseRAGAgent:
         except Exception as e:
             return f"Error generating response: {str(e)}"
 
-
 class CoordinatorAgent(BaseRAGAgent):
     """Main coordinator agent that orchestrates other agents"""
     
@@ -67,7 +65,6 @@ class CoordinatorAgent(BaseRAGAgent):
         super().__init__("coordinator", **kwargs)
         self.available_agents = {}
         self.current_workflow = None
-        self.current_user_id = None
     
     def register_specialist(self, agent_type: str, agent: BaseRAGAgent):
         """Register a specialist agent"""
@@ -116,26 +113,35 @@ class CoordinatorAgent(BaseRAGAgent):
         else:
             return "general_query"
     
-    async def coordinate_response_with_sources(self, query: str, data_sources: Dict[str, Any], user_id: str = None) -> str:
-        """Coordinate response generation using appropriate agents with document sources"""
+    async def coordinate_response(self, query: str, data_sources: Dict[str, Any], user_id: str = None) -> str:
+        """Coordinate response generation using appropriate agents"""
         if user_id:
             self.current_user_id = user_id
             
         workflow = self.determine_workflow(query, data_sources)
         
-        if workflow == "document_query":
-            return await self._document_workflow(query, data_sources)
+        if workflow == "document_query" and "document_expert" in self.available_agents:
+            return await self._single_agent_workflow(query, "document_expert", data_sources)
         else:
-            return await self.generate_reply(query)
+            return self._direct_response(query)
     
-    async def _document_workflow(self, query: str, data_sources: Dict[str, Any]) -> str:
-        """Handle document analysis workflow"""
+    async def _single_agent_workflow(self, query: str, agent_type: str, data_sources: Dict[str, Any]) -> str:
+        """Handle single agent workflow with real document analysis"""
         document_content = await self._get_document_content(data_sources, query)
         
         if not document_content:
-            return "I couldn't find any relevant document content to analyze. Please make sure you have uploaded documents and they have been processed successfully."
+            return "I couldn't find any relevant document content to analyze. Please make sure you have uploaded a PDF document and it has been processed successfully."
 
         try:
+            from openai import AsyncOpenAI
+            import os
+            
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                return "OpenAI API key is not configured. Please check your environment settings."
+            
+            client = AsyncOpenAI(api_key=openai_api_key)
+
             comprehensive_prompt = f"""You are an expert document analyst. Based on the following document content, provide a comprehensive and conversational response to the user's query.
 
 Document Content:
@@ -152,7 +158,7 @@ Please provide a detailed, human-readable response that:
 
 Do NOT return JSON or structured data. Provide a natural, flowing response as if you're having a conversation with the user."""
 
-            response = await self.async_client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful document analysis expert who provides clear, conversational responses based on document content."},
@@ -165,7 +171,7 @@ Do NOT return JSON or structured data. Provide a natural, flowing response as if
             return response.choices[0].message.content.strip()
                 
         except Exception as e:
-            return f"I encountered an error while analyzing the document: {str(e)}. Please try again."
+            return f"I encountered an error while analyzing the document: {str(e)}. Please try again or contact support if the issue persists."
     
     async def _get_document_content(self, data_sources: Dict[str, Any], query: str) -> str:
         """Get document content using semantic search"""
@@ -177,7 +183,7 @@ Do NOT return JSON or structured data. Provide a natural, flowing response as if
             if data_sources.get("pdf_id"):
                 pdf_results = await semantic_search(
                     query=query,
-                    user_id=self.current_user_id,
+                    user_id=self.current_user_id if hasattr(self, 'current_user_id') else None,
                     feature_type="pdf",
                     source_id=data_sources["pdf_id"],
                     top_k=15  
@@ -188,7 +194,7 @@ Do NOT return JSON or structured data. Provide a natural, flowing response as if
             if data_sources.get("csv_id"):
                 csv_results = await semantic_search(
                     query=query,
-                    user_id=self.current_user_id,
+                    user_id=self.current_user_id if hasattr(self, 'current_user_id') else None,
                     feature_type="csv",
                     source_id=data_sources["csv_id"],
                     top_k=15
@@ -199,79 +205,59 @@ Do NOT return JSON or structured data. Provide a natural, flowing response as if
             if data_sources.get("web_id"):
                 web_results = await semantic_search(
                     query=query,
-                    user_id=self.current_user_id,
+                    user_id=self.current_user_id if hasattr(self, 'current_user_id') else None,
                     feature_type="web",
                     source_id=data_sources["web_id"],
                     top_k=15
                 )
                 if web_results:
                     content_chunks.extend([result["chunk_text"] for result in web_results])
-
+            
             if content_chunks:
-                return "\n\n".join(content_chunks[:20])  # Limit to prevent token overflow
-            
-            return ""
-            
+                unique_chunks = []
+                seen_chunks = set()
+                for chunk in content_chunks:
+                    if chunk.strip() and chunk not in seen_chunks:
+                        unique_chunks.append(chunk.strip())
+                        seen_chunks.add(chunk)
+
+                combined_content = "\n\n---\n\n".join(unique_chunks[:20])
+                return combined_content[:32000]  
+            else:
+                return ""
+                
         except Exception as e:
             print(f"Error retrieving document content: {e}")
             return ""
-
-
-class TechnicalSpecialistAgent(BaseRAGAgent):
-    """Agent specialized in technical and coding queries"""
     
-    def __init__(self, **kwargs):
-        super().__init__("technical_specialist", **kwargs)
+    def _direct_response(self, query: str) -> str:
+        """Provide direct response when no specialists are needed"""
+        return f"""I understand you're asking: "{query}"
+
+To provide you with a comprehensive analysis, I need you to upload a PDF document first. Here's what I can help you with once you upload a document:
+
+📄 **Document Analysis:**
+- Summarize the main content and key points
+- Extract specific information based on your questions
+- Analyze document structure and organization
+- Answer questions about the document's content
+
+📊 **Content Insights:**
+- Identify key themes and topics
+- Highlight important findings or conclusions
+- Explain complex concepts in simple terms
+- Compare information across different sections
+
+🔍 **Interactive Q&A:**
+- Answer specific questions about the document
+- Clarify technical terms or concepts
+- Provide detailed explanations of specific sections
+
+Please upload a PDF document using the upload button above, and then ask me any questions about it!"""
 
 
-class ResearchSpecialistAgent(BaseRAGAgent):
-    """Agent specialized in research and analysis"""
+class DocumentExpertAgent(BaseRAGAgent):
+    """Specialized agent for PDF document analysis"""
     
-    def __init__(self, **kwargs):
-        super().__init__("research_specialist", **kwargs)
-
-
-class ContentSpecialistAgent(BaseRAGAgent):
-    """Agent specialized in content creation and writing"""
-    
-    def __init__(self, **kwargs):
-        super().__init__("content_specialist", **kwargs)
-
-
-class GeneralSpecialistAgent(BaseRAGAgent):
-    """General purpose agent for various queries"""
-    
-    def __init__(self, **kwargs):
-        super().__init__("general_specialist", **kwargs)
-
-
-# Agent orchestrator class
-class AgentOrchestrator:
-    """Orchestrates multiple agents for complex workflows"""
-    
-    def __init__(self):
-        self.coordinator = CoordinatorAgent()
-        self._initialize_specialists()
-    
-    def _initialize_specialists(self):
-        """Initialize and register all specialist agents"""
-        specialists = {
-            'technical_specialist': TechnicalSpecialistAgent(),
-            'research_specialist': ResearchSpecialistAgent(),
-            'content_specialist': ContentSpecialistAgent(),
-            'general_specialist': GeneralSpecialistAgent()
-        }
-        
-        for agent_type, agent in specialists.items():
-            self.coordinator.register_specialist(agent_type, agent)
-    
-    async def process_query(self, query: str, data_sources: Dict[str, Any] = None, user_id: str = None) -> str:
-        """Process a query using the appropriate agent workflow"""
-        if data_sources:
-            return await self.coordinator.coordinate_response_with_sources(query, data_sources, user_id)
-        else:
-            return await self.coordinator.coordinate_response(query)
-
-
-# Global orchestrator instance
-orchestrator = AgentOrchestrator()
+    def __init__(self, document_content: Optional[str] = None, **kwargs):
+        super().__init__("document_expert", document_content, **kwargs)
