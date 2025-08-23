@@ -26,7 +26,7 @@ origins = [
     "http://127.0.0.1:3001",
     "http://127.0.0.1:3002", 
     "http://127.0.0.1:3003",
-    "https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app",
+    "https://nova-iota-five.vercel.app",
 ]
 
 # Add production frontend URL if available
@@ -52,7 +52,6 @@ async def handle_cors_preflight(request: Request, call_next):
         allowed_origins = [
             "http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", 
             "http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:3002", "http://127.0.0.1:3003",
-            "https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app"
             "https://nova-iota-five.vercel.app"
         ]
         

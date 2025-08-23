@@ -2,7 +2,7 @@
 
 ## ✅ Changes Made
 - Updated `backend/main.py` to allow requests from your Vercel deployment
-- Added your specific Vercel URL: `https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app`
+- Added your specific Vercel URL: `https://nova-iota-five.vercel.app`
 - Configured CORS to allow all `.vercel.app` domains
 - Pushed changes to GitHub
 
@@ -16,12 +16,12 @@
 ### 2. Add Environment Variable to Render (Optional but Recommended)
 In your Render backend service settings, add this environment variable:
 ```
-FRONTEND_URL=https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app
+FRONTEND_URL=https://nova-iota-five.vercel.app
 ```
 
 ### 3. Test the Fix
 After the backend redeploys (usually takes 2-3 minutes):
-1. Go to your Vercel app: `https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app`
+1. Go to your Vercel app: `https://nova-iota-five.vercel.app`
 2. Open browser developer tools (F12)
 3. Navigate to `/dashboard`
 4. Check if the CORS errors are gone

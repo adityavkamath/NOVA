@@ -30,7 +30,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 ### 5. Optional Frontend URL
 ```
-FRONTEND_URL=https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app
+FRONTEND_URL=https://nova-iota-five.vercel.app
 ```
 
 ## How to Find Your Clerk URLs
