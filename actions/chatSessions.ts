@@ -21,7 +21,8 @@ async function getAuthHeadersWithToken(token: string) {
 
 export async function fetchChatSessions(userId: string, featureType?: string, token?: string) {
   try {
-    const url = new URL('/api/chat/', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://nova-wk2x.onrender.com/' || 'http://localhost:8000';
+    const url = new URL('/api/chat/', baseUrl);
     
     if (featureType) {
       url.searchParams.append('feature_type', featureType);
