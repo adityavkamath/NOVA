@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from .specialized_agents import (
     CoordinatorAgent,
     DocumentExpertAgent,
+    AgentOrchestrator,
 )
 from .agent_config import WORKFLOW_PATTERNS, get_openai_config
 

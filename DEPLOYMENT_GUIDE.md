@@ -1,5 +1,16 @@
 # Nova RAG Assistant - Deployment Guide
 
+## 🚀 FIXED: Render Import Issues
+
+**Issue Resolved**: The `FileNotFoundError: [Errno 2] No such file or directory: '/opt/render/project/src/backend/vectorstore/pinecone_utils.py'` has been **completely fixed**.
+
+**Solution Applied**:
+- Moved `pinecone_utils.py` from `vectorstore/` to `utils/` directory
+- Updated all import statements throughout the codebase
+- Implemented lazy initialization for Pinecone connections
+- Added missing agent configurations
+- Removed old vectorstore directory
+
 ## Project Overview
 This is a production-ready Multi-Source RAG (Retrieval-Augmented Generation) Assistant with:
 - **Backend**: FastAPI with Python 3.13

@@ -226,6 +226,13 @@ class TechnicalSpecialistAgent(BaseRAGAgent):
         super().__init__("technical_specialist", **kwargs)
 
 
+class DocumentExpertAgent(BaseRAGAgent):
+    """Agent specialized in document analysis and PDF processing"""
+    
+    def __init__(self, **kwargs):
+        super().__init__("document_expert", **kwargs)
+
+
 class ResearchSpecialistAgent(BaseRAGAgent):
     """Agent specialized in research and analysis"""
     

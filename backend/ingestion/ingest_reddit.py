@@ -15,7 +15,7 @@ from config import (
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from vectorstore.pinecone_utils import upsert_to_pinecone
+from utils.pinecone_utils import upsert_to_pinecone
 import re
 from dotenv import load_dotenv
 
