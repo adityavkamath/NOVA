@@ -18,11 +18,7 @@ interface Message {
   isLoading?: boolean;
 }
 
-interface CsvChatPageProps {
-  className?: string;
-}
-
-export default function CsvChatPage({ className = "" }: CsvChatPageProps) {
+export default function CsvChatPage() {
   const [leftWidth, setLeftWidth] = useState(40);
   const [isResizing, setIsResizing] = useState(false);
   const [csvUrl, setCsvUrl] = useState("");
@@ -196,7 +192,7 @@ export default function CsvChatPage({ className = "" }: CsvChatPageProps) {
 
   return (
     <div
-      className={`h-screen w-full bg-black text-white flex overflow-hidden ${className}`}
+      className="h-screen w-full bg-black text-white flex overflow-hidden"
     >
       <div ref={containerRef} className="flex w-full h-full">
         {csvUrl && fileName ? (

@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+export const dynamic = 'force-dynamic';
+
+import type React from "react";
+import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUser } from "@clerk/nextjs";
-import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 interface DetailedSource {
@@ -52,8 +54,15 @@ interface SourceOption {
 
 const MultipleSourcesChat = () => {
   const { user } = useUser();
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('sessionId');
+  const [sessionIdFromParams, setSessionIdFromParams] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Get search params on client side only
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setSessionIdFromParams(params.get('sessionId'));
+    }
+  }, []);
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -76,14 +85,14 @@ const MultipleSourcesChat = () => {
   }, []);
 
   useEffect(() => {
-    // Only load chat history if we have a sessionId from URL
-    if (sessionId && user?.id) {
+    // Only load chat history if we have a sessionIdFromParams from URL
+    if (sessionIdFromParams && user?.id) {
       loadChatHistory();
     } else if (user?.id) {
-      // If no sessionId but user is available, create a new session immediately
+      // If no sessionIdFromParams but user is available, create a new session immediately
       createNewSessionAndUpdateURL();
     }
-  }, [sessionId, user?.id]);
+  }, [sessionIdFromParams, user?.id]);
 
   const createNewSessionAndUpdateURL = async () => {
     if (!user?.id) return;
@@ -91,8 +100,8 @@ const MultipleSourcesChat = () => {
     try {
       const newSessionId = await createNewSession();
       if (newSessionId) {
-        // Update URL with new sessionId without page reload
-        const newUrl = `${window.location.pathname}?sessionId=${newSessionId}`;
+        // Update URL with new sessionIdFromParams without page reload
+        const newUrl = `${window.location.pathname}?sessionIdFromParams=${newSessionId}`;
         window.history.replaceState({}, '', newUrl);
       }
     } catch (error) {
@@ -105,12 +114,12 @@ const MultipleSourcesChat = () => {
   }, [messages]);
 
   const loadChatHistory = async () => {
-    if (!sessionId || !user?.id) return;
+    if (!sessionIdFromParams || !user?.id) return;
     
     setIsLoadingHistory(true);
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/multi/sessions/${sessionId}/messages`,
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/multi/sessions/${sessionIdFromParams}/messages`,
         {
           headers: {
             "user-id": user.id,
@@ -232,15 +241,15 @@ const MultipleSourcesChat = () => {
     setIsLoading(true);
 
     try {
-      let currentSessionId = sessionId;
+      let currentSessionId = sessionIdFromParams;
       
-      // If no sessionId, create a new session first
+      // If no sessionIdFromParams, create a new session first
       if (!currentSessionId) {
         const newSessionId = await createNewSession();
         if (newSessionId) {
           currentSessionId = newSessionId;
-          // Update URL with new sessionId
-          window.history.replaceState({}, '', `${window.location.pathname}?sessionId=${newSessionId}`);
+          // Update URL with new sessionIdFromParams
+          window.history.replaceState({}, '', `${window.location.pathname}?sessionIdFromParams=${newSessionId}`);
         } else {
           throw new Error("Failed to create new session");
         }
