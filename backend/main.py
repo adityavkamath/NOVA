@@ -26,6 +26,7 @@ origins = [
     "http://127.0.0.1:3001",
     "http://127.0.0.1:3002", 
     "http://127.0.0.1:3003",
+    "https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app",
 ]
 
 # Add production frontend URL if available
@@ -35,8 +36,8 @@ if frontend_url:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins temporarily to fix CORS
+    allow_credentials=False,  # Must be False when allow_origins is ["*"]
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -47,11 +48,22 @@ async def handle_cors_preflight(request: Request, call_next):
     if request.method == "OPTIONS":
         response = Response()
         origin = request.headers.get("origin")
-        if origin in ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:3002", "http://127.0.0.1:3003"]:
+        # Allow requests from localhost and Vercel deployments
+        allowed_origins = [
+            "http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", 
+            "http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:3002", "http://127.0.0.1:3003",
+            "https://nova-5ja4nyndz-adityas-projects-73ecbb73.vercel.app"
+        ]
+        
+        # Check if origin is allowed or is a vercel.app domain
+        if origin in allowed_origins or (origin and origin.endswith('.vercel.app')):
             response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
         return response
     
     response = await call_next(request)
