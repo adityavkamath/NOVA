@@ -244,8 +244,6 @@ Ready to deploy NOVA to production? We support **Vercel** (frontend) and **Rende
 - **Clerk**: Authentication service (free tier available)
 - **OpenAI**: LLM and embeddings (pay-per-use)
 
-📖 **[Read Complete Deployment Guide →](DEPLOYMENT_GUIDE.md)**
-
 ---
 
 ## Acknowledgements
