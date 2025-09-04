@@ -4,13 +4,6 @@ NOVA is a production-ready, full-stack AI-powered chat and data ingestion platfo
 
 # DATABASE - https://nova-database-viewer.onrender.com/
 
-## 🚀 Live Demo
-- **Frontend**: [Deploy on Vercel](https://vercel.com)
-- **Backend**: [Deploy on Render](https://render.com)
-- **Complete Deployment Guide**: See `DEPLOYMENT_GUIDE.md`
-
----
-
 ## Table of Contents
 - [NOVA - AI-Powered RAG Assistant](#nova---ai-powered-rag-assistant)
   - [🚀 Live Demo](#-live-demo)
