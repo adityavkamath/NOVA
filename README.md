@@ -2,6 +2,8 @@
 
 NOVA is a production-ready, full-stack AI-powered chat and data ingestion platform. It enables users to interact with various data sources (CSV, PDF, web content, GitHub, Reddit, etc.), manage chat sessions, and orchestrate specialized AI agents for different tasks. The project is built with Next.js (frontend) and Python FastAPI (backend), featuring Pinecone vector storage, Supabase database, and Clerk authentication.
 
+#DATABASE - https://nova-database-viewer.onrender.com/
+
 ## 🚀 Live Demo
 - **Frontend**: [Deploy on Vercel](https://vercel.com)
 - **Backend**: [Deploy on Render](https://render.com)
